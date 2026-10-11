@@ -26,7 +26,16 @@ with ZipFile(dest / "cca_zaluzie.zip") as archive:
     assert "manifest.json" in archive.namelist()
     assert "frontend/cca-zaluzie-panel.js" in archive.namelist()
     assert json.loads(archive.read("manifest.json"))["version"] == version
-(dest / "RELEASE_NOTES.md").write_text(
-    (root / "CHANGELOG.md").read_text(encoding="utf-8"), encoding="utf-8"
+changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+sections = changelog.splitlines(keepends=True)
+start = next(
+    (i for i, line in enumerate(sections) if line.strip() == f"# {version}"), None
 )
+if start is None:
+    raise SystemExit(f"CHANGELOG.md has no section for {version}")
+end = next(
+    (i for i in range(start + 1, len(sections)) if sections[i].startswith("# ")),
+    len(sections),
+)
+(dest / "RELEASE_NOTES.md").write_text("".join(sections[start:end]), encoding="utf-8")
 print(f"Built cca_zaluzie.zip for {version}")

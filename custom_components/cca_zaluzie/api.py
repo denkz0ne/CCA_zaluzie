@@ -6,6 +6,7 @@ from pathlib import Path
 
 import probatio as vol
 from homeassistant.components import websocket_api
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.core import Context, callback
@@ -147,6 +148,7 @@ async def async_setup_panel(hass):
                 )
             ]
         )
+        add_extra_js_url(hass, f"/cca_zaluzie/frontend/icons.js?v={VERSION}")
         data["api_registered"] = True
     if not data.get("panel_registered"):
         await async_register_panel(
@@ -154,7 +156,7 @@ async def async_setup_panel(hass):
             frontend_url_path=PANEL_PATH,
             webcomponent_name="cca-zaluzie-panel",
             sidebar_title="CCA Žalúzie",
-            sidebar_icon="mdi:blinds-horizontal",
+            sidebar_icon="cca:day-night-blinds",
             module_url=f"/cca_zaluzie/frontend/cca-zaluzie-panel.js?v={VERSION}",
             require_admin=True,
             config_panel_domain=DOMAIN,
