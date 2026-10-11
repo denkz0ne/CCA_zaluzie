@@ -1,0 +1,36 @@
+control:
+  name: Ovládanie žalúzie
+  description: Vykoná povel pre jednu nakonfigurovanú žalúziu.
+  fields:
+    entry_id:
+      name: Automatizácia
+      required: true
+      selector:
+        config_entry:
+          integration: cca_zaluzie
+    action:
+      name: Povel
+      required: true
+      selector:
+        select:
+          options:
+            - open
+            - close
+            - stop
+            - shade
+            - ventilate
+            - position
+            - enable
+            - disable
+            - clear_override
+            - reconcile
+            - reset
+            - cancel_reset
+    position:
+      name: Poloha
+      description: Cieľová poloha pre povel position.
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: '%'

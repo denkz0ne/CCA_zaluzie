@@ -1,0 +1,302 @@
+{
+  "title": "CCA Žalúzie",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pridať jednu žalúziu",
+        "description": "{error}",
+        "data": {
+          "cover_entity": "Entita žalúzie",
+          "name": "Názov",
+          "cover_type": "Typ žalúzie"
+        },
+        "data_description": {
+          "cover_entity": "Jedna automatizácia ovláda presne jednu žalúziu.",
+          "cover_type": "Markíza a slnečná clona používajú obrátené cieľové polohy podľa CCA."
+        }
+      },
+      "schedule": {
+        "title": "Ranný a večerný plán",
+        "description": "{error}",
+        "data": {
+          "time_enabled": "Časové okná",
+          "morning_enabled": "Ranné otvorenie",
+          "evening_enabled": "Večerné zatvorenie",
+          "morning_early": "Ráno najskôr · pracovný deň",
+          "morning_late": "Ráno najneskôr · pracovný deň",
+          "evening_early": "Večer najskôr · pracovný deň",
+          "evening_late": "Večer najneskôr · pracovný deň"
+        },
+        "data_description": {}
+      }
+    },
+    "error": {
+      "invalid_config": "Skontroluj nastavenia formulára."
+    },
+    "abort": {
+      "already_configured": "Táto žalúzia už má automatizáciu."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavenia žalúzie",
+        "menu_options": {
+          "cover": "Žalúzia",
+          "schedule": "Ráno a večer",
+          "light": "Svetlo a slnko",
+          "shading": "Tienenie",
+          "windows": "Okná a vetranie",
+          "manual": "Ručné ovládanie",
+          "resident": "Režimy a obnova",
+          "advanced": "Podmienky a akcie",
+          "records": "Záznamy"
+        }
+      },
+      "cover": {
+        "title": "Žalúzia",
+        "description": "{error}",
+        "data": {
+          "name": "Názov",
+          "enabled": "Povoliť automatizáciu",
+          "cover_type": "Typ žalúzie",
+          "position_source": "Zdroj polohy",
+          "position_sensor": "Vlastný senzor polohy",
+          "open_position": "Otvorené",
+          "close_position": "Zatvorené",
+          "shade_position": "Tienenie",
+          "vent_position": "Vetranie",
+          "lockout_position": "Otvorené okno",
+          "position_tolerance": "Tolerancia",
+          "drive_time": "Čas úplnej jazdy",
+          "movement_timeout": "Čas na potvrdenie pohybu",
+          "prevent_higher_close": "Pri večernom zatvorení nezdvíhať",
+          "prevent_lower_close_shaded": "Večer zachovať výšku tienenia"
+        },
+        "data_description": {
+          "cover_type": "Markíza a slnečná clona používajú obrátené cieľové polohy podľa CCA.",
+          "drive_time": "Pri zariadení bez spätnej väzby ide o kalibrovaný čas jazdy. Odhad nie je nameraná poloha."
+        }
+      },
+      "schedule": {
+        "title": "Ráno a večer",
+        "description": "{error}",
+        "data": {
+          "time_enabled": "Časové okná",
+          "morning_enabled": "Ranné otvorenie",
+          "evening_enabled": "Večerné zatvorenie",
+          "morning_early": "Ráno najskôr · pracovný deň",
+          "morning_late": "Ráno najneskôr · pracovný deň",
+          "morning_early_free": "Ráno najskôr · voľný deň",
+          "morning_late_free": "Ráno najneskôr · voľný deň",
+          "evening_early": "Večer najskôr · pracovný deň",
+          "evening_late": "Večer najneskôr · pracovný deň",
+          "evening_early_free": "Večer najskôr · voľný deň",
+          "evening_late_free": "Večer najneskôr · voľný deň",
+          "workday_sensor": "Pracovný deň dnes",
+          "workday_tomorrow": "Pracovný deň zajtra",
+          "calendar_entity": "Kalendár",
+          "calendar_enabled": "Riadiť podľa kalendára",
+          "calendar_open_title": "Názov udalosti otvorenia",
+          "calendar_close_title": "Názov udalosti zatvorenia",
+          "open_once": "Otvoriť automaticky iba raz denne",
+          "close_once": "Zatvoriť automaticky iba raz denne"
+        },
+        "data_description": {}
+      },
+      "light": {
+        "title": "Svetlo a slnko",
+        "description": "{error}",
+        "data": {
+          "lux_enabled": "Používať jas",
+          "lux_sensor": "Senzor jasu",
+          "lux_open": "Jas na otvorenie",
+          "lux_close": "Jas na zatvorenie",
+          "lux_hysteresis": "Hysterézia jasu",
+          "lux_duration": "Potvrdenie jasu",
+          "sun_enabled": "Používať výšku slnka",
+          "sun_sensor": "Slnko",
+          "sun_open": "Výška slnka na otvorenie",
+          "sun_close": "Výška slnka na zatvorenie",
+          "sun_open_sensor": "Vlastná hranica otvorenia",
+          "sun_close_sensor": "Vlastná hranica zatvorenia",
+          "sun_duration": "Potvrdenie výšky slnka",
+          "sun_direction": "Smer pohybu slnka",
+          "light_operator": "Kombinácia svetla a slnka",
+          "sun_threshold_mode": "Výpočet hranice výšky slnka"
+        },
+        "data_description": {
+          "sun_threshold_mode": "Pevná hranica, hodnota senzora alebo senzor plus pevný posun."
+        }
+      },
+      "shading": {
+        "title": "Tienenie",
+        "description": "{error}",
+        "data": {
+          "shading_enabled": "Povoliť tienenie",
+          "shade_ignore_time": "Tienenie aj mimo časového okna",
+          "shade_start_and": "Začiatok · musia platiť všetky",
+          "shade_start_or": "Začiatok · aspoň jedna",
+          "shade_end_and": "Ukončenie · musia platiť všetky",
+          "shade_end_or": "Ukončenie · aspoň jedna",
+          "shade_azimuth_start": "Azimut od",
+          "shade_azimuth_end": "Azimut do",
+          "shade_elevation_min": "Výška slnka od",
+          "shade_elevation_max": "Výška slnka do",
+          "shade_lux_start": "Jas na začiatok",
+          "shade_lux_end": "Jas na ukončenie",
+          "shade_lux_hysteresis": "Hysterézia jasu tienenia",
+          "shade_start_delay": "Potvrdenie začiatku",
+          "shade_end_delay": "Potvrdenie ukončenia",
+          "shade_start_max": "Najdlhšie opakovanie začiatku",
+          "shade_end_max": "Najdlhšie opakovanie ukončenia",
+          "shade_lux_sensor": "Jas pre tienenie",
+          "temperature_sensor1": "Teplota 1",
+          "temperature_sensor2": "Teplota 2",
+          "forecast_entity": "Predpoveď počasia",
+          "forecast_temp_sensor": "Vlastná predpovedaná teplota",
+          "shade_custom_sensor": "Vlastná podmienka",
+          "shade_alt_entity": "Spínač alternatívneho tienenia",
+          "temperature1_min": "Hranica teploty 1",
+          "temperature2_min": "Hranica teploty 2",
+          "forecast_min": "Hranica predpovede",
+          "shade_independent_temp": "Nezávislá teplotná hranica",
+          "temperature1_hysteresis": "Hysterézia teploty 1",
+          "temperature2_hysteresis": "Hysterézia teploty 2",
+          "forecast_hysteresis": "Hysterézia predpovede",
+          "forecast_type": "Zdroj predpovede",
+          "shade_weather": "Podmienky počasia",
+          "shade_independent": "Nezávislé tienenie podľa teploty",
+          "shade_compare_sensor2": "Zohľadniť teplotu 2 nezávisle",
+          "shade_hold_hot": "Pri vysokej teplote udržať tienenie",
+          "shade_end_immediate": "Ukončiť ihneď mimo slnečného rozsahu",
+          "shade_alt_position": "Alternatívna poloha tienenia",
+          "shade_once": "Začať tienenie iba raz denne",
+          "prevent_shade_end_closed": "Neukončiť tienenie už zatvorenej žalúzie",
+          "prevent_open_shade_end": "Po tienení neotvárať"
+        },
+        "data_description": {
+          "shade_start_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
+          "shade_start_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
+          "shade_end_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
+          "shade_end_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
+          "forecast_type": "Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav."
+        }
+      },
+      "windows": {
+        "title": "Okná a vetranie",
+        "description": "{error}",
+        "data": {
+          "ventilation_enabled": "Povoliť vetranie a kontakty",
+          "window_open": "Kontakt otvoreného okna",
+          "window_tilted": "Kontakt vyklopeného okna",
+          "contact_delay": "Potvrdenie spúšťača kontaktu",
+          "contact_state_delay": "Oneskorenie stavu kontaktu",
+          "tilted_lockout": "Blokácia pri vyklopení",
+          "shading_over_ventilation": "Uprednostniť tienenie pred vetraním",
+          "prevent_open_vent_end": "Po vetraní neotvárať",
+          "vent_start_no_delay": "Vetranie bez oneskorenia jazdy",
+          "vent_return_delay": "Po zatvorení okna použiť oneskorenie jazdy",
+          "vent_lower_from_above": "Pri vyklopení znížiť vyššiu polohu na vetranie",
+          "vent_after_shade": "Po tienení použiť vetraciu polohu",
+          "vent_keep_full_tilt": "Pri prechode otvorené → vyklopené zachovať otvorenie",
+          "tilted_blocks": "Vyklopené okno blokuje"
+        },
+        "data_description": {
+          "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia."
+        }
+      },
+      "manual": {
+        "title": "Ručné ovládanie",
+        "description": "{error}",
+        "data": {
+          "manual_enabled": "Rozpoznať ručný pohyb",
+          "manual_blocks": "Ručný režim blokuje",
+          "manual_reset_time": "Ukončiť ručný režim každý deň o",
+          "manual_reset_daily": "Použiť denné ukončenie",
+          "manual_timeout": "Ukončiť po uplynutí času",
+          "manual_reset_position_enabled": "Ukončiť pri dosiahnutí polohy",
+          "manual_reset_position": "Poloha ukončenia ručného režimu",
+          "manual_position_dwell": "Výdrž polohy pred ukončením",
+          "manual_return": "Po ukončení nastaviť aktuálny cieľ",
+          "manual_adopt_open": "Ručné otvorenie uznáva ranný plán",
+          "manual_adopt_close": "Ručné zatvorenie uznáva večerný plán",
+          "force_recovery": "Po vynútenom povele obnoviť cieľ",
+          "force_open": "Entita vynucujúca otvorenie",
+          "force_close": "Entita vynucujúca zatvorenie",
+          "force_ventilate": "Entita vynucujúca vetranie",
+          "force_shade": "Entita vynucujúca tienenie",
+          "force_pause": "Entita vynucujúca pauzu"
+        },
+        "data_description": {
+          "manual_timeout": "0 vypne ukončenie podľa trvania."
+        }
+      },
+      "resident": {
+        "title": "Režimy a obnova",
+        "description": "{error}",
+        "data": {
+          "resident_sensor": "Spánok / prítomnosť obyvateľa",
+          "resident_close": "Pri aktivácii zatvoriť",
+          "resident_open": "Po ukončení povoliť otvorenie",
+          "resident_allow_open": "Povoliť otvorenie počas režimu",
+          "resident_allow_shade": "Povoliť tienenie počas režimu",
+          "resident_allow_vent": "Povoliť vetranie počas režimu",
+          "recovery_enabled": "Obnoviť cieľ po výpadku dostupnosti",
+          "startup_recovery": "Po štarte obnoviť vypočítaný cieľ",
+          "instance_entity": "Entita povoľujúca automatizáciu",
+          "instance_value": "Povoľujúci stav"
+        },
+        "data_description": {}
+      },
+      "advanced": {
+        "title": "Podmienky a akcie",
+        "description": "{error}",
+        "data": {
+          "drive_delay": "Oneskorenie pred pohybom",
+          "drive_random": "Dodatočné náhodné oneskorenie",
+          "custom_action_only": "Pohyb iba vlastnými akciami",
+          "global_conditions": "Spoločné podmienky pohybu",
+          "open_conditions": "Otvorenie · podmienky",
+          "open_before": "Otvorenie · akcie pred pohybom",
+          "open_after": "Otvorenie · akcie po pohybe",
+          "close_conditions": "Zatvorenie · podmienky",
+          "close_before": "Zatvorenie · akcie pred pohybom",
+          "close_after": "Zatvorenie · akcie po pohybe",
+          "ventilate_conditions": "Vetranie · podmienky",
+          "ventilate_before": "Vetranie · akcie pred pohybom",
+          "ventilate_after": "Vetranie · akcie po pohybe",
+          "ventilate_end_conditions": "Koniec vetrania · podmienky",
+          "ventilate_end_before": "Koniec vetrania · akcie pred pohybom",
+          "ventilate_end_after": "Koniec vetrania · akcie po pohybe",
+          "shade_start_conditions": "Začiatok tienenia · podmienky",
+          "shade_start_before": "Začiatok tienenia · akcie pred pohybom",
+          "shade_start_after": "Začiatok tienenia · akcie po pohybe",
+          "shade_end_conditions": "Koniec tienenia · podmienky",
+          "shade_end_before": "Koniec tienenia · akcie pred pohybom",
+          "shade_end_after": "Koniec tienenia · akcie po pohybe",
+          "manual_after": "Ručný zásah · akcie",
+          "manual_reset_after": "Koniec ručného režimu · akcie"
+        },
+        "data_description": {
+          "custom_action_only": "Namiesto štandardného povelu použije nakonfigurované akcie. Reset vždy používa štandardné close/stop služby."
+        }
+      },
+      "records": {
+        "title": "Záznamy",
+        "description": "{error}",
+        "data": {
+          "debug": "Podrobné vyhodnotenia",
+          "logbook": "Zapisovať do záznamníka",
+          "logbook_cover": "Priradiť záznamy k žalúzii",
+          "retention_days": "Uchovávanie udalostí",
+          "history_limit": "Najviac uložených udalostí"
+        },
+        "data_description": {}
+      }
+    },
+    "error": {
+      "invalid_config": "Skontroluj nastavenia formulára."
+    }
+  }
+}

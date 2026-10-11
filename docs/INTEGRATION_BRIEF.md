@@ -1,6 +1,7 @@
 # Integration implementation brief
 
-Status: requirements and architecture brief only; no integration code exists yet.
+Status: implemented as a Home Assistant custom integration. This document preserves
+the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
 ## User goal
 

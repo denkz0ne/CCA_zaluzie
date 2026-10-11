@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.ha-venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.superpowers/
+node_modules/
+test-results/
+dist/
+tests/browser/fixture.json

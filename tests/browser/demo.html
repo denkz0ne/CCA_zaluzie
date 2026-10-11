@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CCA Žalúzie · izolovaný náhľad</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+      }
+    </style>
+  </head>
+  <body>
+    <p style="margin: 0; padding: 8px 20px; background: #fff2ca">
+      Izolovaný náhľad · ukážkové údaje · bez ovládania motorov
+    </p>
+    <cca-zaluzie-panel></cca-zaluzie-panel>
+    <script type="module">
+      import "/custom_components/cca_zaluzie/frontend/cca-zaluzie-panel.js";
+      window.fixture = await (
+        await fetch("/tests/browser/fixture.json")
+      ).json();
+      window.calls = [];
+      const hass = {
+        states: Object.fromEntries(
+          fixture.controllers.map((c) => [
+            c.cover_entity,
+            {
+              state: "open",
+              attributes: {
+                friendly_name: c.name,
+                current_position: c.position,
+              },
+            },
+          ]),
+        ),
+        callWS: async (msg) => {
+          window.calls.push(structuredClone(msg));
+          if (msg.type === "cca_zaluzie/list") return structuredClone(fixture);
+          const c = fixture.controllers.find(
+            (c) => c.entry_id === msg.entry_id,
+          );
+          if (msg.type === "cca_zaluzie/configure") {
+            if (window.saveGate) await window.saveGate;
+            if (window.failSave) throw new Error("Nastavenia boli odmietnuté.");
+            c.config = structuredClone(msg.config);
+            c.name = c.config.name;
+            return { saved: true, config: c.config };
+          }
+          if (msg.type === "cca_zaluzie/control") {
+            c.server_time = Date.now() / 1000;
+            if (window.failAction) throw new Error("Žalúzia nie je dostupná.");
+            if (msg.action === "reset")
+              c.runtime.reset = {
+                status: "dwell",
+                started: Date.now() / 1000,
+                due: Date.now() / 1000 + 60,
+              };
+            if (msg.action === "cancel_reset")
+              c.runtime.reset.status = "cancelled";
+            return structuredClone(c);
+          }
+        },
+        connection: {
+          subscribeMessage: async (callback) => {
+            window.publish = callback;
+            return () => {
+              window.unsubscribed = true;
+            };
+          },
+        },
+      };
+      document.querySelector("cca-zaluzie-panel").hass = hass;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "domain": "cca_zaluzie",
+  "name": "CCA Žalúzie",
+  "codeowners": ["@denkz0ne"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
+  "documentation": "https://github.com/denkz0ne/CCA_zaluzie",
+  "integration_type": "helper",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/denkz0ne/CCA_zaluzie/issues",
+  "requirements": [],
+  "version": "2026.10.0"
+}

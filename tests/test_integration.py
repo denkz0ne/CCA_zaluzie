@@ -1,0 +1,391 @@
+"""Real HA config entries, service calls and controller lifecycle."""
+
+import pytest
+
+pytest.importorskip("homeassistant")
+
+from homeassistant.core import Context
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.cca_zaluzie.config import validate_config
+from custom_components.cca_zaluzie.const import DOMAIN
+
+
+@pytest.fixture(autouse=True)
+def custom(enable_custom_integrations):
+    pass
+
+
+@pytest.fixture
+async def entry(hass, monkeypatch):
+    async def register_panel(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("custom_components.cca_zaluzie.api.async_register_panel", register_panel)
+    calls = []
+
+    async def service(call):
+        calls.append(call)
+
+    for name in ("open_cover", "close_cover", "set_cover_position", "stop_cover"):
+        hass.services.async_register("cover", name, service)
+    hass.states.async_set(
+        "cover.blind", "open", {"current_position": 100, "supported_features": 15}
+    )
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test blind",
+        unique_id="cover.blind",
+        data=validate_config(
+            {
+                "cover_entity": "cover.blind",
+                "name": "Test blind",
+                "morning_enabled": False,
+                "evening_enabled": False,
+            }
+        ),
+    )
+    config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    yield config_entry, calls
+    await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_user_config_creates_one_entry_and_rejects_duplicate(hass):
+    hass.states.async_set("cover.blind", "open", {"current_position": 100})
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    assert result["type"] == FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"cover_entity": "cover.blind", "name": "Blind", "cover_type": "blind"}
+    )
+    assert result["step_id"] == "schedule"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "time_enabled": True,
+            "morning_enabled": True,
+            "evening_enabled": True,
+            "morning_early": "06:30",
+            "morning_late": "08:00",
+            "evening_early": "18:00",
+            "evening_late": "21:30",
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    duplicate = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "user"},
+        data={"cover_entity": "cover.blind", "name": "Other", "cover_type": "blind"},
+    )
+    assert duplicate["type"] == FlowResultType.ABORT
+    assert duplicate["reason"] == "already_configured"
+
+
+async def test_invalid_schedule_stays_in_flow(hass):
+    hass.states.async_set("cover.blind", "open")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "user"},
+        data={"cover_entity": "cover.blind", "name": "Blind", "cover_type": "blind"},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"morning_early": "10:00", "morning_late": "08:00"}
+    )
+    assert result["type"] == FlowResultType.FORM and result["errors"]
+
+
+async def test_commands_target_configured_cover_with_own_context(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    await controller.operations.command(58)
+    assert calls[-1].service == "set_cover_position"
+    assert calls[-1].data == {"entity_id": "cover.blind", "position": 58}
+    context = calls[-1].context
+    hass.states.async_set(
+        "cover.blind",
+        "opening",
+        {"current_position": 75, "supported_features": 15},
+        context=context,
+    )
+    await hass.async_block_till_done()
+    assert controller.runtime.manual_since is None
+
+
+async def test_device_feedback_without_context_is_not_a_manual_override(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    await controller.async_control("position", 58)
+    # Explicit controls enter manual mode; clear it to test subsequent device feedback alone.
+    controller.runtime.manual_since = None
+    hass.states.async_set(
+        "cover.blind", "closing", {"current_position": 75, "supported_features": 15}
+    )
+    await hass.async_block_till_done()
+    assert controller.runtime.manual_since is None
+
+
+async def test_external_user_context_records_manual_override(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    hass.states.async_set(
+        "cover.blind",
+        "open",
+        {"current_position": 50, "supported_features": 15},
+        context=Context(user_id="external-user"),
+    )
+    await hass.async_block_till_done()
+    assert controller.runtime.manual_since is not None
+
+
+async def test_options_reload_preserves_history_and_entity_identity(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    await controller.async_control("position", 58)
+    ids = {
+        state.entity_id
+        for state in hass.states.async_all()
+        if state.entity_id.startswith(
+            ("sensor.test_blind", "switch.test_blind", "button.test_blind")
+        )
+    }
+    hass.config_entries.async_update_entry(
+        config_entry, options={**controller.config, "position_tolerance": 3}
+    )
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data is not controller
+    assert config_entry.runtime_data.history
+    assert ids <= {state.entity_id for state in hass.states.async_all()}
+
+
+async def test_unavailable_cover_does_not_receive_command(hass, entry):
+    config_entry, calls = entry
+    hass.states.async_set("cover.blind", "unavailable")
+    await hass.async_block_till_done()
+    with pytest.raises(ValueError):
+        await config_entry.runtime_data.async_control("position", 58)
+    assert calls == []
+
+
+async def test_clear_override_does_not_break_controller(hass, entry):
+    config_entry, _ = entry
+    config_entry.runtime_data.runtime.manual_since = dt_util.utcnow().timestamp()
+    await config_entry.runtime_data.async_control("clear_override")
+    assert config_entry.runtime_data.runtime.manual_since is None
+
+
+async def test_selected_position_sensor_completes_a_command(hass, entry):
+    config_entry, _ = entry
+    hass.states.async_set("sensor.feedback", "100")
+    options = {
+        **config_entry.runtime_data.config,
+        "position_source": "sensor",
+        "position_sensor": "sensor.feedback",
+    }
+    hass.config_entries.async_update_entry(config_entry, options=options)
+    await hass.async_block_till_done()
+    controller = config_entry.runtime_data
+    await controller.operations.command(58)
+    hass.states.async_set("sensor.feedback", "58")
+    await hass.async_block_till_done()
+    assert controller.runtime.command["status"] == "completed"
+    assert controller.runtime.manual_since is None
+
+
+async def test_unknown_selected_sensor_is_not_replaced_by_cover_position(hass, entry):
+    config_entry, _ = entry
+    hass.states.async_set("sensor.feedback", "unavailable")
+    hass.config_entries.async_update_entry(
+        config_entry,
+        options={
+            **config_entry.runtime_data.config,
+            "position_source": "sensor",
+            "position_sensor": "sensor.feedback",
+        },
+    )
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.observe() == (True, None)
+    assert config_entry.runtime_data.decision.inhibit == "position_unknown"
+
+
+async def test_fast_service_feedback_does_not_regress_completed_to_moving(hass, entry):
+    import asyncio
+
+    config_entry, _ = entry
+
+    async def move(call):
+        hass.states.async_set(
+            "cover.blind",
+            "open",
+            {"current_position": call.data["position"], "supported_features": 15},
+            context=call.context,
+        )
+        await asyncio.sleep(0)
+
+    hass.services.async_register("cover", "set_cover_position", move)
+    await config_entry.runtime_data.operations.command(58)
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.runtime.command["status"] == "completed"
+
+
+async def test_native_action_alias_and_template_are_normalized(hass, entry):
+    config_entry, _ = entry
+    values = []
+
+    async def capture(call):
+        values.append(call.data["value"])
+
+    hass.services.async_register("test", "capture", capture)
+    options = {
+        **config_entry.runtime_data.config,
+        "open_after": [{"action": "test.capture", "data": {"value": "{{ target }}"}}],
+    }
+    hass.config_entries.async_update_entry(config_entry, options=options)
+    await hass.async_block_till_done()
+    controller = config_entry.runtime_data
+    controller.decision.target = 100
+    await controller._run_script("open_after")
+    assert values == [100]
+
+
+async def test_generic_ha_service_cannot_bypass_panel_admin_permissions(
+    hass, entry, hass_ws_client, hass_read_only_access_token
+):
+    config_entry, calls = entry
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "call_service",
+            "domain": DOMAIN,
+            "service": "control",
+            "service_data": {"entry_id": config_entry.entry_id, "action": "close"},
+        }
+    )
+    result = await client.receive_json()
+    assert result["success"] is False
+    assert calls == []
+
+
+async def test_stop_cancels_pending_automation_even_when_manual_detection_is_disabled(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config.update(
+        drive_delay=3600, manual_enabled=False, time_enabled=False, evening_enabled=True
+    )
+    today = dt_util.now().date().isoformat()
+    controller.runtime.logical_days = {"open": today, "close": today}
+    controller.runtime.schedule_latched = {"open": True, "close": True}
+    controller.runtime.base_target = 0
+    controller.runtime.base_action = "close"
+    controller.runtime.base_owned = True
+    controller.runtime.hold_signature = None
+    await controller.async_evaluate()
+    await asyncio.sleep(0)
+    await controller.async_control("stop")
+    await hass.async_block_till_done()
+    assert [call.service for call in calls] == ["stop_cover"]
+    assert controller._dispatch_task.done()
+
+
+async def test_options_reload_cancels_reset_and_attempts_stop(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    gate = asyncio.Event()
+
+    async def wait(_seconds):
+        await gate.wait()
+
+    controller.sleep = wait
+    await controller.async_control("reset")
+    await asyncio.sleep(0)
+    hass.config_entries.async_update_entry(
+        config_entry, options={**controller.config, "position_tolerance": 3}
+    )
+    await hass.async_block_till_done()
+    assert calls[-1].service == "stop_cover"
+    assert config_entry.runtime_data.runtime.reset["status"] == "cancelled"
+
+
+@pytest.mark.parametrize(
+    "group",
+    [
+        "cover",
+        "schedule",
+        "light",
+        "shading",
+        "windows",
+        "manual",
+        "resident",
+        "advanced",
+        "records",
+    ],
+)
+async def test_every_native_options_section_opens(hass, entry, group):
+    config_entry, _ = entry
+    menu = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": group}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == group
+
+
+async def test_panel_serves_the_production_module_and_stylesheet(hass, entry, hass_client):
+    client = await hass_client()
+    response = await client.get("/cca_zaluzie/frontend/cca-zaluzie-panel.js")
+    assert response.status == 200
+    assert "cca-zaluzie-panel" in await response.text()
+    response = await client.get("/cca_zaluzie/frontend/panel.css")
+    assert response.status == 200
+
+
+async def test_external_cover_service_interrupts_reset(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    gate = asyncio.Event()
+
+    async def wait(_seconds):
+        await gate.wait()
+
+    controller.sleep = wait
+    await controller.async_control("reset")
+    await hass.services.async_call(
+        "cover",
+        "open_cover",
+        {"entity_id": "cover.blind"},
+        blocking=True,
+        context=Context(user_id="external-user"),
+    )
+    await hass.async_block_till_done()
+    assert controller.runtime.reset["status"] in ("interrupted", "failed")
+    assert not any(event["type"] == "reset_completed" for event in controller.history)
+    assert calls[-1].service == "stop_cover"
+
+
+async def test_panel_rejects_blank_numeric_config_without_changing_the_entry(
+    hass, entry, hass_ws_client
+):
+    config_entry, _ = entry
+    client = await hass_ws_client(hass)
+    config = {**config_entry.runtime_data.config, "open_position": None}
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "cca_zaluzie/configure",
+            "entry_id": config_entry.entry_id,
+            "config": config,
+        }
+    )
+    result = await client.receive_json()
+    assert result["success"] is False and result["error"]["code"] == "invalid_config"
+    assert config_entry.runtime_data.config["open_position"] == 100
