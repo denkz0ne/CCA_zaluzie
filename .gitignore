@@ -10,3 +10,4 @@ htmlcov/
 node_modules/
 test-results/
 dist/
+tests/browser/fixture.json

@@ -4,7 +4,61 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-Research and design only. No integration code has been implemented yet.
+Implementation is on the `integration-release` branch while release validation
+is in progress. The final installation requires Home Assistant **2026.10.0+**.
+
+## Installation
+
+1. In HACS, add `https://github.com/denkz0ne/CCA_zaluzie` as a custom repository,
+   category **Integration**, and download CCA Žalúzie.
+2. Restart Home Assistant manually after installation.
+3. Open Settings → Devices & services → Add integration → **CCA Žalúzie**.
+4. Select one cover, give it a name and configure its morning/evening window.
+5. Open **CCA Žalúzie** in the sidebar for controls, history and grouped settings.
+   Add each additional cover as its own independent integration entry.
+
+Manual installation: extract the release asset `cca_zaluzie.zip` into
+`config/custom_components/cca_zaluzie/`. `manifest.json` must be directly inside
+that directory. Then follow steps 2–5 above.
+
+## Operation
+
+The panel distinguishes measured position, desired target, active condition,
+movement inhibition and pending events. Configuration drafts belong to their
+selected cover and survive section/cover switching; Save commits to HA and
+Discard restores the saved settings. Native options also expose advanced HA
+condition/action editors.
+
+Morning/evening use Early/Late windows and optional workday/calendar/sensor
+conditions. Sun shading moves the whole cover to a partial vertical position.
+Open/tilted window contacts, resident state, manual protection, Force and pause
+remain separate layers. If several Force requests are active, the most recently
+activated wins. Pause inhibits all movement dispatch, including Force.
+
+Startup and unavailable-device recovery are **off by default**. Explicit
+**Prepočítať cieľ** allows reconciliation; settings can enable automatic recovery.
+Unknown required inputs do not authorize movement. For devices without position
+feedback, select the calibrated drive-time source; partial timed movement needs
+an end-stop reset first. The UI labels calculated positions as estimates.
+
+**Reset polohy** closes fully, waits for confirmed arrival (or the explicitly
+configured full drive time), dwells exactly **60 seconds**, then sends STOP.
+The reset owns motor dispatch. Cancellation/unload attempts STOP; interruption,
+unavailability or service failure produces a visible non-success state. It never
+silently restarts after HA restarts.
+
+## Documentation and checks
+
+- [Feature mapping and implementation decisions](docs/FEATURE_MATRIX.md)
+- [Behavior reference](docs/CCA_REFERENCE.md)
+- [Architecture and release acceptance](docs/superpowers/specs/2026-10-11-integration-design.md)
+- [Attribution](ATTRIBUTION.md) · [Changelog](CHANGELOG.md)
+- [GitHub Actions](https://github.com/denkz0ne/CCA_zaluzie/actions)
+
+Pure behavior tests can run on Python 3.12+. Real HA lifecycle/API tests run on
+Linux with Python 3.14 and `requirements_test.txt`; use `python -m pytest -q`.
+Browser tests use `npm ci`, `npx playwright install chromium`, `npm test`.
+Their isolated fixture renders the production panel and never connects to motors.
 
 ## Start here
 

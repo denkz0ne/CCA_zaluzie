@@ -25,7 +25,7 @@ from homeassistant.util import dt as dt_util
 
 from .config import FIELDS, validate_config
 from .const import DOMAIN, EVENT_UPDATED, STORAGE_VERSION
-from .engine import evaluate, mark_manual
+from .engine import evaluate, hold_current, mark_manual
 from .model import Decision, Reading, Runtime, Snapshot
 from .operations import MotorOperations, OperationError
 
@@ -76,7 +76,9 @@ class CoverController:
             sensor = self.hass.states.get(self.config["position_sensor"])
             position = Reading(sensor.state).number() if sensor else None
         else:
-            position = Reading(state.state, dict(state.attributes)).number(source)
+            position = Reading(
+                state.state, dict(state.attributes), state.last_changed.timestamp()
+            ).number(source)
         if position is None and state.state in ("closed", "open"):
             position = 0 if state.state == "closed" else 100
         return True, position
@@ -194,7 +196,9 @@ class CoverController:
                 or (moved and not active_command and not self.operations.resetting)
             )
             if external and self.config["manual_enabled"]:
-                mark_manual(self.config, self.runtime, position, dt_util.now())
+                mark_manual(
+                    self.config, self.runtime, position, dt_util.now(), self._snapshot_inputs()
+                )
                 await self.record(
                     "manual_detected", {"position": position, "context_id": context.id}
                 )
@@ -207,7 +211,7 @@ class CoverController:
                 command.update(status="completed", ended=self.now(), observed=position)
                 await self.record("command_completed", command.copy())
             if available and not self._last_available and not self.config["recovery_enabled"]:
-                self.runtime.hold_signature = [self.decision.target, self.decision.mode]
+                hold_current(self.runtime, self.decision.target, self.decision.mode)
             self._last_available, self._last_position = available, position
         await self.async_evaluate()
 
@@ -259,7 +263,9 @@ class CoverController:
             if spec.kind == "entity" and self.config[key]:
                 state = self.hass.states.get(self.config[key])
                 if state:
-                    entities[state.entity_id] = Reading(state.state, dict(state.attributes))
+                    entities[state.entity_id] = Reading(
+                        state.state, dict(state.attributes), state.last_changed.timestamp()
+                    )
         gates = {}
         variables = {
             "cover_entity": self.config["cover_entity"],
@@ -285,7 +291,7 @@ class CoverController:
             )
             decision = self.decision
             if self._starting and not self.config["startup_recovery"]:
-                self.runtime.hold_signature = [decision.target, decision.mode]
+                hold_current(self.runtime, decision.target, decision.mode)
                 decision.inhibit = "startup_hold"
             available, position = self.observe()
             if available and position is None and self.config["position_source"] != "drive_time":
@@ -294,7 +300,7 @@ class CoverController:
             if command and command.get("status") == "moving" and self.now() >= command["deadline"]:
                 command.update(status="failed", error="Pohyb sa nepotvrdil v časovom limite")
                 self.runtime.fault = command["error"]
-                self.runtime.hold_signature = [decision.target, decision.mode]
+                hold_current(self.runtime, decision.target, decision.mode)
                 await self.record("command_failed", command.copy())
                 decision.inhibit = "movement_failed"
             signature = (decision.target, decision.mode, decision.inhibit, decision.pending)
@@ -378,7 +384,7 @@ class CoverController:
             raise
         except Exception as error:
             self.runtime.fault = str(error)
-            self.runtime.hold_signature = [target, mode]
+            hold_current(self.runtime, target, mode)
             await self.record("action_failed", {"target": target, "error": str(error)})
 
     @callback

@@ -253,3 +253,78 @@ def test_runtime_roundtrip_preserves_pending_and_manual_dates():
     restored = Runtime.from_dict(rt.to_dict())
     assert restored.manual_since == NOW.timestamp()
     assert restored.pending == rt.pending
+
+
+def test_latest_active_force_wins_then_returns_to_previous_active_force():
+    cfg = config(force_open="input_boolean.up", force_close="input_boolean.down")
+    rt = Runtime()
+    snap = world(
+        **{
+            "input_boolean.up": Reading("on", changed_at=100),
+            "input_boolean.down": Reading("on", changed_at=200),
+        }
+    )
+    assert evaluate(cfg, rt, snap, NOW).target == 0
+    snap.entities["input_boolean.down"] = Reading("off", changed_at=300)
+    assert evaluate(cfg, rt, snap, NOW).target == 100
+
+
+def test_shading_hysteresis_band_does_not_arm_start():
+    cfg = shade_config(shade_start_delay=0, shade_lux_hysteresis=1000)
+    assert evaluate(cfg, Runtime(), shaded_world("35500"), NOW.replace(hour=12)).target is None
+
+
+def test_shading_end_recovers_open_when_no_daily_schedule_is_enabled():
+    cfg = shade_config(shade_start_delay=0, shade_end_delay=0)
+    rt = Runtime()
+    evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12))
+    assert evaluate(cfg, rt, shaded_world("10000"), NOW.replace(hour=13)).target == 100
+
+
+def test_new_day_schedule_releases_hold_even_when_target_is_the_same():
+    cfg = config(evening_enabled=False, manual_return=False, manual_timeout=60)
+    rt = Runtime(manual_since=NOW.timestamp())
+    evaluate(cfg, rt, world(), NOW)
+    assert evaluate(cfg, rt, world(), NOW + timedelta(seconds=60)).inhibit == "manual_reset_hold"
+    assert evaluate(cfg, rt, world(), NOW + timedelta(days=1)).inhibit is None
+
+
+def test_contact_release_delay_rearms_after_a_second_open():
+    cfg = config(
+        ventilation_enabled=True,
+        window_open="binary_sensor.window",
+        contact_delay=0,
+        contact_state_delay=10,
+    )
+    rt = Runtime()
+    opened = world(**{"binary_sensor.window": Reading("on")})
+    closed = world(**{"binary_sensor.window": Reading("off")})
+    evaluate(cfg, rt, opened, NOW)
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=1))
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=11))
+    evaluate(cfg, rt, opened, NOW + timedelta(seconds=12))
+    assert evaluate(cfg, rt, closed, NOW + timedelta(seconds=13)).mode == "window_lockout"
+
+
+def test_manual_adoption_uses_live_workday_selection():
+    cfg = config(
+        workday_sensor="binary_sensor.workday",
+        morning_early_free="10:00",
+        morning_late_free="11:00",
+    )
+    rt = Runtime()
+    snap = world(**{"binary_sensor.workday": Reading("off")})
+    mark_manual(cfg, rt, 100, NOW, snap)
+    assert "open" not in rt.days
+
+
+def test_unknown_required_sun_sensor_cannot_end_active_shading():
+    cfg = shade_config(
+        shade_start_delay=0, shade_end_delay=0, shade_end_and=["azimuth"], shade_end_or=[]
+    )
+    rt = Runtime()
+    evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12))
+    assert (
+        evaluate(cfg, rt, world(**{"sun.sun": Reading("unavailable")}), NOW.replace(hour=13)).mode
+        == "shading"
+    )

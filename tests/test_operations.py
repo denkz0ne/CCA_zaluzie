@@ -163,3 +163,42 @@ async def test_reset_unconfirmed_arrival_times_out_instead_of_dwell_success():
     await op.reset_task
     assert op.runtime.reset["status"] == "failed"
     assert port.time == 1010
+
+
+async def test_no_feedback_full_move_stops_after_calibrated_drive_time():
+    port = Port()
+    port.position = None
+    port.stall = True
+    op = motor(port, position_source="drive_time", drive_time=45)
+    await op.command(0)
+    assert [(at, service) for at, service, _ in port.calls] == [
+        (1000, "close_cover"),
+        (1045, "stop_cover"),
+    ]
+    assert op.runtime.command["status"] == "estimated"
+    assert op.runtime.estimated_position == 0
+
+
+async def test_no_feedback_partial_move_requires_homing_and_uses_distance():
+    port = Port()
+    port.position = None
+    port.stall = True
+    op = motor(port, position_source="drive_time", drive_time=100)
+    with pytest.raises(OperationError):
+        await op.command(50)
+    op.runtime.estimated_position = 0
+    await op.command(30)
+    assert [(at, service) for at, service, _ in port.calls] == [
+        (1000, "open_cover"),
+        (1030, "stop_cover"),
+    ]
+    assert op.runtime.command["status"] == "estimated"
+
+
+async def test_completed_estimate_does_not_repeat_without_new_target():
+    port = Port()
+    port.position = None
+    port.stall = True
+    op = motor(port, position_source="drive_time", drive_time=1)
+    await op.command(0)
+    assert await op.command(0) is False

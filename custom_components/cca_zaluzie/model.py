@@ -11,10 +11,19 @@ from typing import Any
 class Reading:
     state: str
     attributes: dict[str, Any] = field(default_factory=dict)
+    changed_at: float = 0
 
     @property
     def valid(self) -> bool:
-        return self.state not in ("unknown", "unavailable", "", "none")
+        return self.state not in (
+            "unknown",
+            "unavailable",
+            "",
+            "none",
+            "None",
+            "null",
+            "query failed",
+        )
 
     def number(self, attribute: str | None = None) -> float | None:
         if not self.valid:

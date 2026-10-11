@@ -63,6 +63,18 @@ class MotorOperations:
                 return False
             previous = self.runtime.command
             if (
+                self.config["position_source"] == "drive_time"
+                and not force
+                and self.runtime.estimated_position == target
+            ):
+                return False
+            if (
+                self.config["position_source"] == "drive_time"
+                and target not in (0, 100)
+                and self.runtime.estimated_position is None
+            ):
+                raise OperationError("Pred čiastočnou polohou vykonaj reset polohy")
+            if (
                 not force
                 and previous
                 and previous.get("target") == target
@@ -86,9 +98,45 @@ class MotorOperations:
             )
             data = {"position": target} if service == "set_cover_position" else {}
             try:
-                await self.port.service(service, data)
-                command["status"] = "moving"
-                await self.port.record("command_sent", command.copy())
+                if self.config["position_source"] == "drive_time":
+                    previous_position = self.runtime.estimated_position
+                    service = (
+                        "open_cover"
+                        if target
+                        > (
+                            previous_position
+                            if previous_position is not None
+                            else (0 if target == 100 else 100)
+                        )
+                        else "close_cover"
+                    )
+                    duration = self.config["drive_time"] * (
+                        abs(target - previous_position) / 100
+                        if previous_position is not None
+                        else 1
+                    )
+                    command["deadline"] = (
+                        self.port.now() + duration + self.config["movement_timeout"]
+                    )
+                    await self.port.service(service, {})
+                    command["status"] = "moving"
+                    await self.port.record("command_sent", command.copy())
+                    try:
+                        await self._wait_available(duration)
+                    finally:
+                        await self.port.service("stop_cover", {})
+                    self.runtime.estimated_position = target
+                    command.update(status="estimated", ended=self.port.now())
+                    await self.port.record("command_estimated", command.copy())
+                else:
+                    await self.port.service(service, data)
+                    command["status"] = "moving"
+                    await self.port.record("command_sent", command.copy())
+            except asyncio.CancelledError:
+                command.update(status="interrupted", ended=self.port.now())
+                self.runtime.estimated_position = None
+                await self.port.record("command_interrupted", command.copy())
+                raise
             except Exception as error:
                 command.update(status="failed", error=str(error))
                 self.runtime.fault = str(error)
@@ -149,6 +197,7 @@ class MotorOperations:
                 await self.port.record("reset_stopping", reset.copy())
                 await self.port.service("stop_cover", {})
                 reset.update(status="completed", ended=self.port.now())
+                self.runtime.estimated_position = 0
                 self.runtime.fault = None
                 if self.runtime.command:
                     self.runtime.command["status"] = "cancelled"

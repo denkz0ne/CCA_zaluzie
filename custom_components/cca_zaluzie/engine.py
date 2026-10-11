@@ -69,7 +69,11 @@ def _shade_predicates(cfg: dict, snap: Snapshot, end: bool) -> dict[str, bool | 
         "azimuth": az,
         "elevation": el,
         "brightness": _compare(
-            lux, cfg["shade_lux_end"] if end else cfg["shade_lux_start"], not end
+            lux,
+            cfg["shade_lux_end"] - cfg["shade_lux_hysteresis"]
+            if end
+            else cfg["shade_lux_start"] + cfg["shade_lux_hysteresis"],
+            not end,
         ),
         "forecast": _compare(
             forecast, cfg["forecast_min"] - (cfg["forecast_hysteresis"] if end else 0), not end
@@ -99,13 +103,16 @@ def _position(cfg: dict, snap: Snapshot) -> float | None:
     return snap.get(cfg["cover_entity"]).number(cfg["position_source"])
 
 
-def mark_manual(cfg: dict, rt: Runtime, position: float | None, now: datetime) -> None:
+def mark_manual(
+    cfg: dict, rt: Runtime, position: float | None, now: datetime, snap: Snapshot | None = None
+) -> None:
     """Record genuine external operation and optionally adopt today's schedule."""
     if not cfg["manual_enabled"]:
         return
     rt.manual_since = now.timestamp()
     rt.manual_position = position
     rt.hold_signature = None
+    rt.stable.pop("manual.position", None)
     for action in ("open", "close"):
         prefix = "morning" if action == "open" else "evening"
         if (
@@ -114,9 +121,9 @@ def mark_manual(cfg: dict, rt: Runtime, position: float | None, now: datetime) -
             or not cfg["time_enabled"]
         ):
             continue
-        # Calendar/workday-specific adoption is finalized against the live snapshot by runtime.
-        suffix = "" if now.weekday() < 5 else "_free"
-        early, late = cfg[f"{prefix}_early{suffix}"], cfg[f"{prefix}_late{suffix}"]
+        early, late, known = _window(cfg, snap or Snapshot(), now, action)
+        if not known:
+            continue
         if (
             position is not None
             and abs(position - cfg[f"{action}_position"]) <= cfg["position_tolerance"]
@@ -124,6 +131,11 @@ def mark_manual(cfg: dict, rt: Runtime, position: float | None, now: datetime) -
         ):
             rt.days[action] = now.date().isoformat()
             rt.base_target, rt.base_action = cfg[f"{action}_position"], action
+
+
+def hold_current(rt: Runtime, target: float | None, mode: str) -> None:
+    """Hold only this decision generation; a new daily event can release the hold."""
+    rt.hold_signature = [target, mode, rt.days.copy()]
 
 
 def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
@@ -222,6 +234,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         or cfg["shade_ignore_time"]
         or _at(now, early).timestamp() <= ts < _at(now, late).timestamp()
     )
+    was_shading = rt.shading
     phase = "shade_end" if rt.shading else "shade_start"
     predicates = _shade_predicates(cfg, snap, rt.shading)
     trace.update({f"shade.{k}": v for k, v in predicates.items()})
@@ -284,6 +297,8 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             if phase in rt.expired:
                 rt.expired.remove(phase)
 
+    if was_shading and not rt.shading and rt.base_target is None:
+        rt.base_target, rt.base_action = cfg["open_position"], "open"
     target, mode, action = (
         rt.base_target,
         "schedule" if rt.base_target is not None else "idle",
@@ -332,6 +347,10 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                 continue
             value = snap.get(cfg[field]).boolean()
             contact_unknown |= value is None
+            if value is not True:
+                rt.stable.pop(f"contact.{name}", None)
+            if value is not False:
+                rt.stable.pop(f"contact.{name}.release", None)
             delay = cfg["contact_delay"]
             # State delay adds protection on release; activation uses trigger debounce.
             if value is False and rt.last_window == name:
@@ -366,7 +385,8 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     trace["window.state"] = window
 
     force = None
-    # Upstream's deterministic resolution when multiple Force entities are active.
+    # Upstream uses last-activated-wins, including when one of several forces clears.
+    candidates = []
     for suffix, target_key, force_action in (
         ("open", "open_position", "open"),
         ("close", "close_position", "close"),
@@ -374,16 +394,20 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         ("shade", "shade_position", "shade_start"),
     ):
         if cfg[f"force_{suffix}"] and snap.get(cfg[f"force_{suffix}"]).boolean() is True:
-            force = f"force_{suffix}"
-            target, mode, action, reason = (
-                cfg[target_key],
-                force,
-                force_action,
-                "Vynútený povel má najvyššiu prioritu",
+            candidates.append(
+                (snap.get(cfg[f"force_{suffix}"]).changed_at, suffix, target_key, force_action)
             )
-            suppressed.extend(("schedule", "shading", "manual", "window"))
-            break
-    signature = [target, mode]
+    if candidates:
+        _, suffix, target_key, force_action = max(candidates)
+        force = f"force_{suffix}"
+        target, mode, action, reason = (
+            cfg[target_key],
+            force,
+            force_action,
+            "Najnovší aktívny vynútený povel má najvyššiu prioritu",
+        )
+        suppressed.extend(("schedule", "shading", "manual", "window"))
+    signature = [target, mode, rt.days.copy()]
     if rt.last_force and not force and not cfg["force_recovery"]:
         rt.hold_signature = signature
     rt.last_force = force
