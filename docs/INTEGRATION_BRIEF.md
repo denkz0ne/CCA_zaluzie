@@ -11,7 +11,10 @@ Create a Home Assistant custom integration that manages multiple blinds/shutters
 - The new project/repository is named **CCA_zaluzie**.
 - The new integration manages configured covers according to user-defined schedules and behavior.
 - The interface should follow the same general principle as EC: covers grouped into controllers/rooms, a timeline of events, and visible current state, blocks, manual states and controls.
-- Feature concepts explicitly named: shading, morning/evening control, blocking, manual states, and settings per configuration.
+- Preserve the original CCA logic and its layered conditions/controls, expanding blueprint architecture limits where useful.
+- Only ordinary vertical blinds/shutters that move up and down are supported. Lamella/tilt movement is excluded; shading by moving the entire blind to a partial-height position remains required.
+- Feature concepts explicitly named: shading, morning/evening control, blocking, manual states, strong debug/states/logs/timelines, and settings per configuration.
+- Simplify configuration through progressive disclosure and conditional fields without deleting applicable CCA behavior.
 - The integration should have a similar config flow to EC.
 - CCA is the behavior source to study. Latest checked snapshot: upstream version 2026.10.04, commit 83e9925.
 
@@ -20,7 +23,7 @@ Create a Home Assistant custom integration that manages multiple blinds/shutters
 ### Main view
 Use EC's compact controller overview as the interaction model:
 - One controller/card per configured cover (or optional named group/controller containing covers).
-- Show cover name, current position and tilt when available, availability, active/disabled status, current desired mode/target, next event and concise reason/status.
+- Show cover name, current vertical position when available, availability, active/disabled status, current desired mode/target, next event and concise reason/status.
 - Show key actions without opening settings: open, close, stop, set shading/ventilation target, pause/enable automation, clear override, run/resync if allowed.
 - Use a timeline covering a configurable period, default conceptually 24 hours, with distinct event types: scheduled morning opening, evening close, sun shading start/end, ventilation, forced state, lockout, manual override, blocked action and recovery. Mark actual vs planned events separately.
 - Provide clear state distinctions: waiting for time window, waiting for sensor, pending confirmation/delay, moving, active shading, manual override, force active, blocked by contact, paused, unavailable, disabled and idle.
@@ -32,8 +35,8 @@ Use EC's compact controller overview as the interaction model:
 ### Config flow (proposed progressive sections)
 1. Create named controller/cover entry; select one or more `cover` entities (MVP may start with one cover per controller but data model should support multiple).
 2. Basic schedule: morning open, evening close, weekdays/weekends, optional workday/calendar support.
-3. Cover calibration: cover type, open/closed mapping if entity semantics require it, preferred open/close/shading/ventilation targets, position/tilt availability and tolerances.
-4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls.
+3. Cover calibration: select ordinary vertical cover, confirm direction/position source, configure open/close/shading/ventilation targets, position feedback and tolerance. Do not offer tilt/lamella settings.
+4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls. Keep all applicable CCA behavior available; only omit tilt/lamella controls and unsupported inverted cover types.
 5. Configure only the fields relevant to selected behaviors; advanced conditions can be tucked away.
 6. Preview/validate schedule and conflicts; finish with a controller dashboard.
 7. Options flow edits settings later without destroying runtime history. Reconfigure should preserve config entry and entities where possible.
@@ -56,7 +59,7 @@ CCA states Force outranks window lockout and manual override; pause is a final d
 
 ### Idempotence and lifecycle
 - Evaluate triggers and scheduled boundaries, but route every decision through one per-cover state machine / coordinator.
-- Before sending a service call, check availability, current position/tilt, tolerance, active motion and inhibit reasons.
+- Before sending a service call, check availability, current vertical position, tolerance, active motion and inhibit reasons.
 - Distinguish desired target from actual position and command lifecycle.
 - Debounce noisy sensors and use hysteresis to avoid repeated moves.
 - For delayed shading, record a pending decision; after delay, re-evaluate all conditions. Cancel/reset pending when conditions fail.
@@ -109,3 +112,16 @@ Before changing code, read:
 4. current upstream source and docs if behavior is being implemented (upstream main can change).
 
 Keep feature decisions traceable to one of: user-confirmed requirement, CCA observed behavior, EC layout precedent, or explicitly labeled proposal. Do not present proposals as decisions. For substantial runtime behavior, write tests around priorities, timing, unavailable values, restarts and duplicate triggers before coding.
+
+## Scope clarification: CCA limits and simplified setup
+
+- Preserve every applicable CCA behavior and its layered condition logic. Do not cut the project down to the initial “basic” feature slice.
+- Expand implementation limits caused by the blueprint model: multiple covers managed under the integration, integration-owned state (no 254-character helper per cover), central/shared configuration with per-cover overrides, richer persisted history and integration-native UI/diagnostics.
+- Retain behavioral safeguards that are useful: early/late schedule boundaries, trigger dwell/wait times, hysteresis, retry ceilings, position tolerance, lockout, and explicit recovery policy.
+- Simplify the user task, not the behavior: presets, sensible defaults, conditional fields, grouped advanced sections, validation and a preview. Users should not need to understand 100 YAML selector IDs to configure one blind.
+- Exclude only lamella angle/tilt functionality (including tilt shading bands and tilt-specific delays/wait/reposition). Shading by moving a vertical blind to a partial height remains a core CCA feature.
+- Exclude cover types whose orientation/semantics do not match ordinary vertical blinds/shutters (e.g. awnings and inverted sunshades), unless the user later changes this requirement.
+
+## Debug and operational visibility (required)
+
+Treat observability as a core feature, not a later polish task. Provide structured debug mode and clear logs; per-cover state/reason sensors or diagnostics; a detailed event timeline/history; pending timer and next-event visibility; evaluated condition snapshots; block/cancel/failure reasons; last command and observed result; and HA diagnostics export without credentials. Keep bounded history with a configurable retention policy. Make the UI answer: what is the desired target, what condition currently wins, what is blocking motion, what will happen next, and why did the last decision occur?
