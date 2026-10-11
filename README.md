@@ -1,6 +1,6 @@
 # CCA_zaluzie
 
-Home Assistant custom integration for automated vertical blinds and shutters, preserving applicable behavior of Cover Control Automation (CCA) and the dashboard interaction model of Svetlo v tme / Entity Controller.
+Home Assistant custom integration for automated blinds and shutters, with one automation and side-panel row per cover, preserving applicable behavior of Cover Control Automation (CCA) and the dashboard interaction model of Svetlo v tme / Entity Controller.
 
 ## Project status
 
