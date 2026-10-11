@@ -93,7 +93,7 @@ The integration should own its config and state; do not require per-cover `input
 
 ## Delivery approach
 
-Deliver in vertical slices, but the target remains behavioral parity with all applicable CCA logic. Keep a feature matrix that marks each branch as implemented, in progress, deferred or explicitly excluded. The only confirmed functional exclusions are every lamella/tilt behavior and inverted awning/sunshade types; shading via partial vertical position is included. A first usable slice can provide the config flow, multi-cover model, basic schedule, manual override/pause, and timeline/debug foundation; subsequent slices add CCA condition groups, shading, ventilation, resident/calendar, force/recovery/actions, and full diagnostics. This is sequencing only, not a feature cut. Do not label the first slice “CCA parity.”
+Deliver in vertical slices, but the target remains behavioral parity with all applicable CCA logic. Keep a feature matrix that marks each branch as implemented, in progress, deferred or explicitly excluded. The only confirmed functional exclusion is every lamella/tilt behavior; shading via partial vertical position is included. A first usable slice can provide the config flow, multi-cover model, basic schedule, manual override/pause, and timeline/debug foundation; subsequent slices add CCA condition groups, shading, ventilation, resident/calendar, force/recovery/actions, and full diagnostics. This is sequencing only, not a feature cut. Do not label the first slice “CCA parity.”
 
 ## Agent instructions
 
@@ -112,7 +112,7 @@ Keep feature decisions traceable to one of: user-confirmed requirement, CCA obse
 - Retain behavioral safeguards that are useful: early/late schedule boundaries, trigger dwell/wait times, hysteresis, retry ceilings, position tolerance, lockout, and explicit recovery policy.
 - Simplify the user task, not the behavior: presets, sensible defaults, conditional fields, grouped advanced sections, validation and a preview. Users should not need to understand 100 YAML selector IDs to configure one blind.
 - Exclude only lamella angle/tilt functionality (including tilt shading bands and tilt-specific delays/wait/reposition). Shading by moving a vertical blind to a partial height remains a core CCA feature.
-- Exclude cover types whose orientation/semantics do not match ordinary vertical blinds/shutters (e.g. awnings and inverted sunshades), unless the user later changes this requirement.
+- Do not add other exclusions from CCA without an explicit user decision. Preserve the upstream cover-type and orientation handling as applicable.
 
 ## Debug and operational visibility (required)
 
