@@ -555,13 +555,14 @@ class CoverController:
                 self.runtime.completed_days[action] = self.runtime.logical_days.get(
                     action, dt_util.now().date().isoformat()
                 )
-            await self._persist()
             if (
                 moved
                 and self.runtime.manual_since is not None
-                and action not in self.config["manual_blocks"]
+                and (self.runtime.manual_policy_action or action)
+                not in self.config["manual_blocks"]
             ):
                 self.runtime.manual_since = None
+            await self._persist()
             self._arm_timer()
         except asyncio.CancelledError:
             self.runtime.pending_dispatch = None
