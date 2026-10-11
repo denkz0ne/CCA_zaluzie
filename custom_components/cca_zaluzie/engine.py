@@ -819,7 +819,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     if cfg["resident_sensor"] and resident is None and not force:
         inhibit = "resident_unknown"
     gates = ["global", action]
-    if not force and rt.manual_policy_action in ("open", "close"):
+    if not force and action == "ventilate" and rt.manual_policy_action in ("open", "close"):
         gates.append(rt.manual_policy_action)
     if action in ("shade_end", "ventilate_end"):
         destination = (
