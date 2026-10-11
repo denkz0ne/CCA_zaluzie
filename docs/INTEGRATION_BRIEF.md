@@ -22,11 +22,11 @@ Create a Home Assistant custom integration that manages multiple blinds/shutters
 
 ### Main view
 Use EC's compact controller overview as the interaction model:
-- One controller/card per configured cover (or optional named group/controller containing covers).
+- Exactly one automation/controller per cover and exactly one row/card per cover in the side panel, following Entity Controller's per-controller row pattern. Do not group multiple independently controlled covers into a single automation row; shared defaults may be applied during setup, but runtime state, controls, logs, timeline and reset action remain per cover.
 - Show cover name, current vertical position when available, availability, active/disabled status, current desired mode/target, next event and concise reason/status.
-- Show key actions without opening settings: open, close, stop, set shading/ventilation target, pause/enable automation, clear override, run/resync if allowed.
+- Show key actions without opening settings: open, close, stop, set shading/ventilation target, pause/enable automation, clear override, reset position, run/resync if allowed.
 - Use a timeline covering a configurable period, default conceptually 24 hours, with distinct event types: scheduled morning opening, evening close, sun shading start/end, ventilation, forced state, lockout, manual override, blocked action and recovery. Mark actual vs planned events separately.
-- Provide clear state distinctions: waiting for time window, waiting for sensor, pending confirmation/delay, moving, active shading, manual override, force active, blocked by contact, paused, unavailable, disabled and idle.
+- Provide clear state distinctions: waiting for time window, waiting for sensor, pending confirmation/delay, moving, active shading, manual override, force active, blocked by contact, paused, position reset in progress, unavailable, disabled and idle.
 - A timeline event should be inspectable and say *why* it is scheduled, delayed, blocked, cancelled or executed.
 - EC's current overview presents controller state/status text, room/controller toggles, edit settings, per-entity state controls and a 24-hour state history. Reuse that information hierarchy and legibility, adapted to cover entities and a richer event timeline.
 - Provide an individual detail view with full timeline, current target arbitration, source sensor values, last decision and diagnostics.
@@ -42,6 +42,18 @@ Use EC's compact controller overview as the interaction model:
 7. Options flow edits settings later without destroying runtime history. Reconfigure should preserve config entry and entities where possible.
 
 ## Runtime behavior requirements
+
+### Per-cover position reset (end-stop calibration)
+
+Each cover row must offer a manual **Reset position** action. This is a deliberate calibration cycle for covers whose reported position has drifted or is no longer trustworthy:
+1. Start by commanding that cover fully down/closed.
+2. Keep the cover at the lower end stop for **60 seconds**.
+3. Send a stop command.
+4. Only after the sequence succeeds, mark the cover's position as reset/calibrated and record a completion event.
+
+Requirements: run independently per cover; show a visible countdown/progress state and timestamp in its row and timeline; reject a second reset while one is active; allow a safe cancel; do not allow schedule/shading/ventilation/manual service commands to race this sequence; preserve schedule/force/override state and recompute the desired target after completion or cancellation. On unavailable cover, failed close/stop service, HA restart, or interrupted sequence, mark reset as failed/interrupted and do not claim calibration succeeded. Persist enough operation state to report interruption after restart; require an explicit retry rather than silently restarting motor movement. Make the 60-second dwell configurable only if later requested; initial behavior is exactly one minute.
+
+The calibration command is explicitly a full-close movement followed by a one-minute bottom-end-stop dwell and stop. Do not replace it with a software-only position assignment or a generic `cover.set_cover_position` assumption unless the selected device/service semantics have been validated.
 
 ### Desired-target arbitration
 Treat each cover's current physical state and desired target as different data. Recompute target deterministically from current configuration and HA state, with a user-readable winning reason and suppressed lower-priority reasons. Start with an explicit priority model:
@@ -69,11 +81,11 @@ CCA states Force outranks window lockout and manual override; pause is a final d
 - Explain all blocked/suppressed decisions in UI and logs.
 
 ### Entities / controls (initial direction)
-Each controller could expose:
+Each per-cover automation/controller could expose:
 - a control/select entity for operating mode (automatic, paused, manual/force modes);
 - binary sensors for shading, manual override, window lockout, force pause, availability/fault as applicable;
 - sensors for current desired action, next planned event, last decision/reason, schedule window and runtime status;
-- buttons for clear override / reconcile if appropriate.
+- buttons for clear override / reconcile and per-cover position reset.
 Do not create entity clutter without a user action. Prefer device grouping and entity categories.
 
 ### Persistence and migration
