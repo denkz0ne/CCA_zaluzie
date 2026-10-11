@@ -1,4 +1,5 @@
 """Pause automatic decisions without losing configured behavior."""
+
 from homeassistant.components.switch import SwitchEntity
 
 from .entity import CCAEntity

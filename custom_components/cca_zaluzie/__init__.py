@@ -1,4 +1,5 @@
 """CCA Žalúzie: one independently managed vertical cover per entry."""
+
 from __future__ import annotations
 
 import probatio as vol
@@ -22,7 +23,33 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
         except ValueError as error:
             raise HomeAssistantError(str(error)) from error
 
-    hass.services.async_register(DOMAIN, "control", control, schema=vol.Schema({vol.Required("entry_id"): str, vol.Required("action"): vol.In(["open", "close", "stop", "shade", "ventilate", "position", "enable", "disable", "clear_override", "reconcile", "reset", "cancel_reset"]), vol.Optional("position"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100))}))
+    hass.services.async_register(
+        DOMAIN,
+        "control",
+        control,
+        schema=vol.Schema(
+            {
+                vol.Required("entry_id"): str,
+                vol.Required("action"): vol.In(
+                    [
+                        "open",
+                        "close",
+                        "stop",
+                        "shade",
+                        "ventilate",
+                        "position",
+                        "enable",
+                        "disable",
+                        "clear_override",
+                        "reconcile",
+                        "reset",
+                        "cancel_reset",
+                    ]
+                ),
+                vol.Optional("position"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+            }
+        ),
+    )
     return True
 
 
@@ -55,7 +82,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["controllers"].pop(entry.entry_id, None)
         if not hass.data[DOMAIN]["controllers"]:
             from homeassistant.components import frontend
+
             from .const import PANEL_PATH
+
             frontend.async_remove_panel(hass, PANEL_PATH)
             hass.data[DOMAIN]["panel_registered"] = False
         return True
@@ -64,7 +93,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     from homeassistant.helpers.storage import Store
+
     from .const import STORAGE_VERSION
+
     await Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()
 
 

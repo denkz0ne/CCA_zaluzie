@@ -1,10 +1,12 @@
 """Native setup and grouped options without YAML helpers."""
+
 from __future__ import annotations
 
 import probatio as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers import config_validation as cv, selector
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import selector
 
 from .config import FIELDS, GROUPS, ConfigError, validate_config
 from .const import DOMAIN
@@ -12,16 +14,39 @@ from .const import DOMAIN
 
 def field_selector(spec):
     if spec.kind == "number":
-        return selector.NumberSelector(selector.NumberSelectorConfig(min=spec.minimum, max=spec.maximum, mode=selector.NumberSelectorMode.BOX, unit_of_measurement=spec.unit or None))
+        return selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=spec.minimum,
+                max=spec.maximum,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement=spec.unit or None,
+            )
+        )
     if spec.kind == "bool":
         return selector.BooleanSelector()
     if spec.kind == "time":
         return selector.TimeSelector()
     if spec.kind == "entity":
-        domain = "cover" if spec.key == "cover_entity" else "calendar" if spec.key == "calendar_entity" else None
-        return selector.EntitySelector(selector.EntitySelectorConfig(**({"domain": domain} if domain else {})))
+        domain = (
+            "cover"
+            if spec.key == "cover_entity"
+            else "calendar"
+            if spec.key == "calendar_entity"
+            else None
+        )
+        return selector.EntitySelector(
+            selector.EntitySelectorConfig(**({"domain": domain} if domain else {}))
+        )
     if spec.kind in ("select", "multi"):
-        return selector.SelectSelector(selector.SelectSelectorConfig(options=list(spec.options), multiple=spec.kind == "multi", mode=selector.SelectSelectorMode.LIST if spec.kind == "multi" else selector.SelectSelectorMode.DROPDOWN))
+        return selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=list(spec.options),
+                multiple=spec.kind == "multi",
+                mode=selector.SelectSelectorMode.LIST
+                if spec.kind == "multi"
+                else selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
     if spec.kind in ("action", "condition"):
         return selector.selector({spec.kind: {}})
     return selector.TextSelector()
@@ -32,7 +57,11 @@ def build_schema(config: dict, keys: list[str]) -> vol.Schema:
     for key in keys:
         spec = FIELDS[key]
         value = config.get(key, spec.default)
-        marker = vol.Optional(key, description={"suggested_value": value}) if spec.kind == "entity" and key != "cover_entity" else vol.Required(key, default=value)
+        marker = (
+            vol.Optional(key, description={"suggested_value": value})
+            if spec.kind == "entity" and key != "cover_entity"
+            else vol.Required(key, default=value)
+        )
         schema[marker] = field_selector(spec)
     return vol.Schema(schema)
 
@@ -70,10 +99,23 @@ class CCAConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_schedule()
             except ConfigError as error:
                 errors["base"], details = "invalid_config", str(error)
-        return self.async_show_form(step_id="user", data_schema=build_schema(user_input or {}, ["cover_entity", "name", "cover_type"]), errors=errors, description_placeholders={"error": details})
+        return self.async_show_form(
+            step_id="user",
+            data_schema=build_schema(user_input or {}, ["cover_entity", "name", "cover_type"]),
+            errors=errors,
+            description_placeholders={"error": details},
+        )
 
     async def async_step_schedule(self, user_input=None):
-        keys = ["time_enabled", "morning_enabled", "evening_enabled", "morning_early", "morning_late", "evening_early", "evening_late"]
+        keys = [
+            "time_enabled",
+            "morning_enabled",
+            "evening_enabled",
+            "morning_early",
+            "morning_late",
+            "evening_early",
+            "evening_late",
+        ]
         errors, details = {}, ""
         if user_input is not None:
             try:
@@ -81,7 +123,12 @@ class CCAConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=config["name"], data=config)
             except ConfigError as error:
                 errors["base"], details = "invalid_config", str(error)
-        return self.async_show_form(step_id="schedule", data_schema=build_schema({**self._data, **(user_input or {})}, keys), errors=errors, description_placeholders={"error": details})
+        return self.async_show_form(
+            step_id="schedule",
+            data_schema=build_schema({**self._data, **(user_input or {})}, keys),
+            errors=errors,
+            description_placeholders={"error": details},
+        )
 
     @staticmethod
     @callback
@@ -99,17 +146,26 @@ class CCAOptionsFlow(config_entries.OptionsFlow):
         errors, details = {}, ""
         if user_input is not None:
             try:
-                candidate = validate_config({**config, **{k: v for k, v in user_input.items() if k in keys}}, cover_entity=self.config_entry.data["cover_entity"])
+                candidate = validate_config(
+                    {**config, **{k: v for k, v in user_input.items() if k in keys}},
+                    cover_entity=self.config_entry.data["cover_entity"],
+                )
                 await async_validate_native(self.hass, candidate)
                 return self.async_create_entry(title="", data=candidate)
             except (ConfigError, vol.Invalid, ValueError) as error:
                 errors["base"], details = "invalid_config", str(error)
-        return self.async_show_form(step_id=group, data_schema=build_schema({**config, **(user_input or {})}, keys), errors=errors, description_placeholders={"error": details})
+        return self.async_show_form(
+            step_id=group,
+            data_schema=build_schema({**config, **(user_input or {})}, keys),
+            errors=errors,
+            description_placeholders={"error": details},
+        )
 
 
 def _step(group):
     async def handler(self, user_input=None):
         return await self._group(group, user_input)
+
     return handler
 
 

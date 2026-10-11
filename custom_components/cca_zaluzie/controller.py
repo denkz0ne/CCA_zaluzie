@@ -1,19 +1,24 @@
 """Home Assistant adapter for one independently persisted cover controller."""
+
 from __future__ import annotations
 
 import asyncio
+import logging
+import random
 from collections import deque
 from contextlib import suppress
 from copy import deepcopy
 from datetime import timedelta
-import logging
-import random
 from typing import Any
 from uuid import uuid4
 
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers import condition
-from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -88,8 +93,13 @@ class CoverController:
                 raise OperationError("Zariadenie nepodporuje nastavenie čiastočnej polohy")
             await self._timed_position(data["position"], context)
             return
-        await self.hass.services.async_call("cover", service,
-            {"entity_id": self.config["cover_entity"], **data}, blocking=True, context=context)
+        await self.hass.services.async_call(
+            "cover",
+            service,
+            {"entity_id": self.config["cover_entity"], **data},
+            blocking=True,
+            context=context,
+        )
 
     async def _timed_position(self, target: float, context: Context) -> None:
         previous = getattr(self.runtime, "estimated_position", None)
@@ -97,15 +107,29 @@ class CoverController:
             raise OperationError("Pred časovým odhadom čiastočnej polohy vykonaj reset polohy")
         service = "open_cover" if target > previous else "close_cover"
         duration = abs(target - previous) / 100 * self.config["drive_time"]
-        await self.hass.services.async_call("cover", service, {"entity_id": self.config["cover_entity"]}, blocking=True, context=context)
+        await self.hass.services.async_call(
+            "cover",
+            service,
+            {"entity_id": self.config["cover_entity"]},
+            blocking=True,
+            context=context,
+        )
         try:
             due = self.now() + duration
             while self.now() < due:
                 if not self.observe()[0] or self.decision.inhibit:
-                    raise OperationError("Časový pohyb sa prerušil po zmene dostupnosti alebo blokácie")
+                    raise OperationError(
+                        "Časový pohyb sa prerušil po zmene dostupnosti alebo blokácie"
+                    )
                 await self.sleep(min(1, due - self.now()))
         finally:
-            await self.hass.services.async_call("cover", "stop_cover", {"entity_id": self.config["cover_entity"]}, blocking=True, context=context)
+            await self.hass.services.async_call(
+                "cover",
+                "stop_cover",
+                {"entity_id": self.config["cover_entity"]},
+                blocking=True,
+                context=context,
+            )
         self.runtime.estimated_position = target
 
     def _spawn(self, coro) -> asyncio.Task:
@@ -122,15 +146,27 @@ class CoverController:
         await self.operations.restore()
         for key, spec in FIELDS.items():
             if spec.kind == "condition" and self.config[key]:
-                validated = await condition.async_validate_conditions_config(self.hass, self.config[key])
-                self._checks[key] = await condition.async_conditions_from_config(self.hass, validated, _LOGGER, f"{self.entry.title}: {key}")
+                validated = await condition.async_validate_conditions_config(
+                    self.hass, self.config[key]
+                )
+                self._checks[key] = await condition.async_conditions_from_config(
+                    self.hass, validated, _LOGGER, f"{self.entry.title}: {key}"
+                )
             elif spec.kind == "action" and self.config[key]:
-                self._scripts[key] = Script(self.hass, deepcopy(self.config[key]), f"{self.entry.title}: {key}", DOMAIN)
+                self._scripts[key] = Script(
+                    self.hass, deepcopy(self.config[key]), f"{self.entry.title}: {key}", DOMAIN
+                )
         self._active = True
         self._last_available, self._last_position = self.observe()
-        watched = {self.config[k] for k, spec in FIELDS.items() if spec.kind == "entity" and self.config[k]}
-        self._unsubs.append(async_track_state_change_event(self.hass, list(watched), self._on_state))
-        self._unsubs.append(async_track_time_interval(self.hass, self._refresh_sources, timedelta(minutes=5)))
+        watched = {
+            self.config[k] for k, spec in FIELDS.items() if spec.kind == "entity" and self.config[k]
+        }
+        self._unsubs.append(
+            async_track_state_change_event(self.hass, list(watched), self._on_state)
+        )
+        self._unsubs.append(
+            async_track_time_interval(self.hass, self._refresh_sources, timedelta(minutes=5))
+        )
         await self._refresh_sources()
         await self.async_evaluate()
         self._starting = False
@@ -148,13 +184,26 @@ class CoverController:
             own = context.id in self.contexts or context.parent_id in self.contexts
             command = self.runtime.command
             active_command = bool(command and command.get("status") in ("requested", "moving"))
-            moved = position is not None and self._last_position is not None and abs(position - self._last_position) > self.config["position_tolerance"]
-            external = not own and (context.user_id is not None or (moved and not active_command and not self.operations.resetting))
+            moved = (
+                position is not None
+                and self._last_position is not None
+                and abs(position - self._last_position) > self.config["position_tolerance"]
+            )
+            external = not own and (
+                context.user_id is not None
+                or (moved and not active_command and not self.operations.resetting)
+            )
             if external and self.config["manual_enabled"]:
                 mark_manual(self.config, self.runtime, position, dt_util.now())
-                await self.record("manual_detected", {"position": position, "context_id": context.id})
+                await self.record(
+                    "manual_detected", {"position": position, "context_id": context.id}
+                )
                 await self._run_script("manual_after")
-            if active_command and position is not None and abs(position - command["target"]) <= self.config["position_tolerance"]:
+            if (
+                active_command
+                and position is not None
+                and abs(position - command["target"]) <= self.config["position_tolerance"]
+            ):
                 command.update(status="completed", ended=self.now(), observed=position)
                 await self.record("command_completed", command.copy())
             if available and not self._last_available and not self.config["recovery_enabled"]:
@@ -166,7 +215,13 @@ class CoverController:
         weather = self.config["forecast_entity"]
         if weather and self.hass.services.has_service("weather", "get_forecasts"):
             try:
-                response = await self.hass.services.async_call("weather", "get_forecasts", {"entity_id": weather, "type": self.config["forecast_type"]}, blocking=True, return_response=True)
+                response = await self.hass.services.async_call(
+                    "weather",
+                    "get_forecasts",
+                    {"entity_id": weather, "type": self.config["forecast_type"]},
+                    blocking=True,
+                    return_response=True,
+                )
                 forecasts = response.get(weather, {}).get("forecast", [])
                 values = [Reading(str(f.get("temperature", "unknown"))).number() for f in forecasts]
                 self._forecast[weather] = max((x for x in values if x is not None), default=None)
@@ -174,9 +229,23 @@ class CoverController:
                 self._forecast[weather] = None
                 _LOGGER.warning("%s forecast unavailable: %s", self.entry.title, error)
         calendar = self.config["calendar_entity"]
-        if self.config["calendar_enabled"] and calendar and self.hass.services.has_service("calendar", "get_events"):
+        if (
+            self.config["calendar_enabled"]
+            and calendar
+            and self.hass.services.has_service("calendar", "get_events")
+        ):
             try:
-                response = await self.hass.services.async_call("calendar", "get_events", {"entity_id": calendar, "start_date_time": dt_util.now().isoformat(), "end_date_time": (dt_util.now() + timedelta(days=2)).isoformat()}, blocking=True, return_response=True)
+                response = await self.hass.services.async_call(
+                    "calendar",
+                    "get_events",
+                    {
+                        "entity_id": calendar,
+                        "start_date_time": dt_util.now().isoformat(),
+                        "end_date_time": (dt_util.now() + timedelta(days=2)).isoformat(),
+                    },
+                    blocking=True,
+                    return_response=True,
+                )
                 self._calendar = response.get(calendar, {}).get("events", [])
             except Exception as error:
                 self._calendar = []
@@ -192,7 +261,11 @@ class CoverController:
                 if state:
                     entities[state.entity_id] = Reading(state.state, dict(state.attributes))
         gates = {}
-        variables = {"cover_entity": self.config["cover_entity"], "target": self.decision.target, "reason": self.decision.reason}
+        variables = {
+            "cover_entity": self.config["cover_entity"],
+            "target": self.decision.target,
+            "reason": self.decision.reason,
+        }
         for key, checker in self._checks.items():
             event = "global" if key == "global_conditions" else key.removesuffix("_conditions")
             try:
@@ -207,7 +280,9 @@ class CoverController:
         async with self._eval_lock:
             old = self.decision
             was_manual = self.runtime.manual_since is not None
-            self.decision = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
+            self.decision = evaluate(
+                self.config, self.runtime, self._snapshot_inputs(), dt_util.now()
+            )
             decision = self.decision
             if self._starting and not self.config["startup_recovery"]:
                 self.runtime.hold_signature = [decision.target, decision.mode]
@@ -232,10 +307,20 @@ class CoverController:
             if self._dispatch_task and not self._dispatch_task.done():
                 if decision.inhibit or (old.target, old.mode) != (decision.target, decision.mode):
                     self._dispatch_task.cancel()
-            if decision.target is not None and not decision.inhibit and not self.operations.resetting:
+            if (
+                decision.target is not None
+                and not decision.inhibit
+                and not self.operations.resetting
+            ):
                 if self._dispatch_task is None or self._dispatch_task.done():
-                    if not command or command.get("status") not in ("moving", "requested") or command.get("target") != decision.target:
-                        self._dispatch_task = self._spawn(self._dispatch(decision.target, decision.mode, decision.action))
+                    if (
+                        not command
+                        or command.get("status") not in ("moving", "requested")
+                        or command.get("target") != decision.target
+                    ):
+                        self._dispatch_task = self._spawn(
+                            self._dispatch(decision.target, decision.mode, decision.action)
+                        )
             self._arm_timer()
             self._notify()
 
@@ -244,7 +329,14 @@ class CoverController:
         if script:
             context = Context()
             self.contexts.append(context.id)
-            await script.async_run({"cover_entity": self.config["cover_entity"], "target": self.decision.target, "reason": self.decision.reason}, context=context)
+            await script.async_run(
+                {
+                    "cover_entity": self.config["cover_entity"],
+                    "target": self.decision.target,
+                    "reason": self.decision.reason,
+                },
+                context=context,
+            )
 
     async def _dispatch(self, target: float, mode: str, action: str) -> None:
         delay = self.config["drive_delay"] + random.uniform(0, self.config["drive_random"])
@@ -254,13 +346,19 @@ class CoverController:
                 await self.sleep(delay)
             current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
             if current.inhibit or (current.target, current.mode) != (target, mode):
-                await self.record("drive_cancelled", {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"})
+                await self.record(
+                    "drive_cancelled",
+                    {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"},
+                )
                 return
             await self._run_script(f"{action}_before")
             # Before-actions may change pause, contacts or availability. Recheck immediately.
             current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
             if current.inhibit or current.target != target:
-                await self.record("drive_cancelled", {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"})
+                await self.record(
+                    "drive_cancelled",
+                    {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"},
+                )
                 return
             if self.config["custom_action_only"]:
                 if f"{action}_after" not in self._scripts:
@@ -273,7 +371,10 @@ class CoverController:
                 self.runtime.manual_since = None
             self._arm_timer()
         except asyncio.CancelledError:
-            await self.record("drive_cancelled", {"target": target, "reason": "Rozhodnutie sa zmenilo alebo integrácia sa vypla"})
+            await self.record(
+                "drive_cancelled",
+                {"target": target, "reason": "Rozhodnutie sa zmenilo alebo integrácia sa vypla"},
+            )
             raise
         except Exception as error:
             self.runtime.fault = str(error)
@@ -285,24 +386,56 @@ class CoverController:
         if self._timer:
             self._timer()
             self._timer = None
-        deadlines = [x for x in (self.decision.next_at, (self.runtime.command or {}).get("deadline") if (self.runtime.command or {}).get("status") == "moving" else None) if x and x > self.now()]
+        deadlines = [
+            x
+            for x in (
+                self.decision.next_at,
+                (self.runtime.command or {}).get("deadline")
+                if (self.runtime.command or {}).get("status") == "moving"
+                else None,
+            )
+            if x and x > self.now()
+        ]
         if deadlines and self._active:
+
             @callback
             def tick(_now):
                 self._timer = None
                 self._spawn(self.async_evaluate())
-            self._timer = async_track_point_in_utc_time(self.hass, tick, dt_util.utc_from_timestamp(min(deadlines)))
+
+            self._timer = async_track_point_in_utc_time(
+                self.hass, tick, dt_util.utc_from_timestamp(min(deadlines))
+            )
 
     async def record(self, event: str, details: dict) -> None:
-        record = {"id": uuid4().hex, "at": dt_util.utcnow().isoformat(), "type": event, "details": deepcopy(details)}
+        record = {
+            "id": uuid4().hex,
+            "at": dt_util.utcnow().isoformat(),
+            "type": event,
+            "details": deepcopy(details),
+        }
         self.history.append(record)
         cutoff = self.now() - self.config["retention_days"] * 86400
-        self.history = [x for x in self.history if dt_util.parse_datetime(x["at"]).timestamp() >= cutoff][-int(self.config["history_limit"]):]
+        self.history = [
+            x for x in self.history if dt_util.parse_datetime(x["at"]).timestamp() >= cutoff
+        ][-int(self.config["history_limit"]) :]
         log = _LOGGER.warning if "failed" in event or "interrupted" in event else _LOGGER.debug
         log("%s: %s %s", self.entry.title, event, details)
         await self.store.async_save({"runtime": self.runtime.to_dict(), "history": self.history})
         if self.config["logbook"] and event != "decision":
-            self.hass.bus.async_fire("logbook_entry", {"name": self.config["name"], "message": event, "domain": DOMAIN, **({"entity_id": self.config["cover_entity"]} if self.config["logbook_cover"] else {})})
+            self.hass.bus.async_fire(
+                "logbook_entry",
+                {
+                    "name": self.config["name"],
+                    "message": event,
+                    "domain": DOMAIN,
+                    **(
+                        {"entity_id": self.config["cover_entity"]}
+                        if self.config["logbook_cover"]
+                        else {}
+                    ),
+                },
+            )
         self._notify()
         if event == "reset_completed" and self.config["position_source"] == "drive_time":
             self.runtime.estimated_position = 0
@@ -322,9 +455,22 @@ class CoverController:
 
     def snapshot(self) -> dict[str, Any]:
         available, position = self.observe()
-        return {"entry_id": self.entry.entry_id, "name": self.config["name"], "cover_entity": self.config["cover_entity"], "available": available,
-            "position": position, "config": deepcopy(self.config), "decision": self.decision.to_dict(), "runtime": self.runtime.to_dict(),
-            "events": deepcopy(self.history), "sensors": {k: {"state": v.state, "attributes": v.attributes} for k, v in self._snapshot_inputs().entities.items()}, "server_time": self.now()}
+        return {
+            "entry_id": self.entry.entry_id,
+            "name": self.config["name"],
+            "cover_entity": self.config["cover_entity"],
+            "available": available,
+            "position": position,
+            "config": deepcopy(self.config),
+            "decision": self.decision.to_dict(),
+            "runtime": self.runtime.to_dict(),
+            "events": deepcopy(self.history),
+            "sensors": {
+                k: {"state": v.state, "attributes": v.attributes}
+                for k, v in self._snapshot_inputs().entities.items()
+            },
+            "server_time": self.now(),
+        }
 
     async def async_control(self, action: str, position: float | None = None) -> None:
         if action == "reset":
@@ -339,7 +485,13 @@ class CoverController:
             await self.operations.stop()
             mark_manual(self.config, self.runtime, self.observe()[1], dt_util.now())
         elif action in ("open", "close", "shade", "ventilate", "position"):
-            targets = {"open": self.config["open_position"], "close": self.config["close_position"], "shade": self.config["shade_position"], "ventilate": self.config["vent_position"], "position": position}
+            targets = {
+                "open": self.config["open_position"],
+                "close": self.config["close_position"],
+                "shade": self.config["shade_position"],
+                "ventilate": self.config["vent_position"],
+                "position": position,
+            }
             target = targets[action]
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
@@ -355,7 +507,9 @@ class CoverController:
             await self.record(action, {})
         elif action in ("enable", "disable"):
             self.config["enabled"] = action == "enable"
-            self.hass.config_entries.async_update_entry(self.entry, options={**self.entry.options, "enabled": self.config["enabled"]})
+            self.hass.config_entries.async_update_entry(
+                self.entry, options={**self.entry.options, "enabled": self.config["enabled"]}
+            )
         else:
             raise OperationError("Neznámy povel")
         await self.async_evaluate()

@@ -1,4 +1,5 @@
 """Serialized motor protocol with explicit reset completion and interruption."""
+
 from __future__ import annotations
 
 import asyncio
@@ -28,11 +29,18 @@ class MotorOperations:
 
     @property
     def resetting(self) -> bool:
-        return bool(self.runtime.reset and self.runtime.reset.get("status") in ("closing", "dwell", "stopping"))
+        return bool(
+            self.runtime.reset
+            and self.runtime.reset.get("status") in ("closing", "dwell", "stopping")
+        )
 
     async def restore(self) -> None:
         if self.resetting:
-            self.runtime.reset.update(status="interrupted", ended=self.port.now(), error="Reštart alebo prerušenie procesu")
+            self.runtime.reset.update(
+                status="interrupted",
+                ended=self.port.now(),
+                error="Reštart alebo prerušenie procesu",
+            )
             await self.port.record("reset_interrupted", self.runtime.reset.copy())
         if self.runtime.command and self.runtime.command.get("status") in ("requested", "moving"):
             self.runtime.command["status"] = "interrupted"
@@ -47,15 +55,35 @@ class MotorOperations:
             available, position = self.port.observe()
             if not available:
                 raise OperationError("Žalúzia nie je dostupná")
-            if position is not None and abs(position - target) <= self.config["position_tolerance"] and not force:
+            if (
+                position is not None
+                and abs(position - target) <= self.config["position_tolerance"]
+                and not force
+            ):
                 return False
             previous = self.runtime.command
-            if not force and previous and previous.get("target") == target and previous.get("status") in ("requested", "moving"):
+            if (
+                not force
+                and previous
+                and previous.get("target") == target
+                and previous.get("status") in ("requested", "moving")
+            ):
                 return False
-            command = {"target": target, "started": self.port.now(), "status": "requested", "deadline": self.port.now() + self.config["movement_timeout"]}
+            command = {
+                "target": target,
+                "started": self.port.now(),
+                "status": "requested",
+                "deadline": self.port.now() + self.config["movement_timeout"],
+            }
             self.runtime.command = command
             await self.port.record("command_requested", command.copy())
-            service = "close_cover" if target == 0 else "open_cover" if target == 100 else "set_cover_position"
+            service = (
+                "close_cover"
+                if target == 0
+                else "open_cover"
+                if target == 100
+                else "set_cover_position"
+            )
             data = {"position": target} if service == "set_cover_position" else {}
             try:
                 await self.port.service(service, data)
@@ -127,11 +155,21 @@ class MotorOperations:
                 await self.port.record("reset_completed", reset.copy())
             except asyncio.CancelledError:
                 stop_error = await self._safe_stop()
-                reset.update(status="failed" if stop_error else "cancelled", ended=self.port.now(), error=stop_error)
-                await self.port.record("reset_failed" if stop_error else "reset_cancelled", reset.copy())
+                reset.update(
+                    status="failed" if stop_error else "cancelled",
+                    ended=self.port.now(),
+                    error=stop_error,
+                )
+                await self.port.record(
+                    "reset_failed" if stop_error else "reset_cancelled", reset.copy()
+                )
             except Exception as error:
                 stop_error = await self._safe_stop()
-                reset.update(status="failed", ended=self.port.now(), error=f"{error}" + (f"; STOP: {stop_error}" if stop_error else ""))
+                reset.update(
+                    status="failed",
+                    ended=self.port.now(),
+                    error=f"{error}" + (f"; STOP: {stop_error}" if stop_error else ""),
+                )
                 self.runtime.fault = reset["error"]
                 await self.port.record("reset_failed", reset.copy())
 
@@ -152,5 +190,9 @@ class MotorOperations:
             if self.resetting:
                 # Task cancellation before its first instruction still requires a visible terminal state.
                 error = await self._safe_stop()
-                self.runtime.reset.update(status="failed" if error else "cancelled", ended=self.port.now(), error=error)
-                await self.port.record("reset_failed" if error else "reset_cancelled", self.runtime.reset.copy())
+                self.runtime.reset.update(
+                    status="failed" if error else "cancelled", ended=self.port.now(), error=error
+                )
+                await self.port.record(
+                    "reset_failed" if error else "reset_cancelled", self.runtime.reset.copy()
+                )

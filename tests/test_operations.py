@@ -1,4 +1,5 @@
 """Motor protocol tests use a deterministic clock and a real operation executor."""
+
 import asyncio
 
 import pytest
@@ -44,7 +45,9 @@ class Port:
 
 
 def motor(port, **config):
-    return MotorOperations(validate_config({"cover_entity": "cover.blind", **config}), Runtime(), port)
+    return MotorOperations(
+        validate_config({"cover_entity": "cover.blind", **config}), Runtime(), port
+    )
 
 
 async def test_reset_closes_then_dwell_exactly_sixty_then_stop():
@@ -52,7 +55,10 @@ async def test_reset_closes_then_dwell_exactly_sixty_then_stop():
     op = motor(port)
     await op.start_reset()
     await op.reset_task
-    assert [(at, service) for at, service, _ in port.calls] == [(1000, "close_cover"), (1060, "stop_cover")]
+    assert [(at, service) for at, service, _ in port.calls] == [
+        (1000, "close_cover"),
+        (1060, "stop_cover"),
+    ]
     assert op.runtime.reset["status"] == "completed"
 
 
