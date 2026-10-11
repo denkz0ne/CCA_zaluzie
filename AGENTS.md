@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-This repository is a new Home Assistant custom integration project. Before implementation, read:
+This repository is a new Home Assistant custom integration project for ordinary vertical blinds/shutters. Preserve applicable CCA behavior; exclude only lamella/tilt control and inverted awning/sunshade types. Whole-blind partial-height sun shading remains supported. Strong state visibility, timelines, debug logs and diagnostics are requirements. Before implementation, read:
 - [docs/INTEGRATION_BRIEF.md](docs/INTEGRATION_BRIEF.md)
 - [docs/CCA_REFERENCE.md](docs/CCA_REFERENCE.md)
 
