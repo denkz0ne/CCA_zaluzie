@@ -27,6 +27,10 @@ class MotorOperations:
         self.lock = asyncio.Lock()
         self.reset_task: asyncio.Task | None = None
         self.motion_task: asyncio.Task | None = None
+        self.reset_due_monotonic: float | None = None
+
+    def _clock(self) -> float:
+        return self.port.monotonic() if hasattr(self.port, "monotonic") else self.port.now()
 
     @property
     def resetting(self) -> bool:
@@ -122,11 +126,12 @@ class MotorOperations:
                     command["deadline"] = (
                         self.port.now() + duration + self.config["movement_timeout"]
                     )
+                    due = self._clock() + duration
                     await self.port.service(service, {})
                     command["status"] = "moving"
                     await self.port.record("command_sent", command.copy())
                     try:
-                        await self._wait_available(duration)
+                        await self._wait_available(max(0, due - self._clock()))
                     finally:
                         await self.port.service("stop_cover", {})
                     self.runtime.estimated_position = target
@@ -183,6 +188,9 @@ class MotorOperations:
             raise OperationError("Žalúzia už vykonáva inú operáciu")
         if not self.port.observe()[0]:
             raise OperationError("Žalúzia nie je dostupná")
+        if self.config["position_source"] != "drive_time" and self.port.observe()[1] is None:
+            raise OperationError("Spätná väzba polohy nie je dostupná")
+        self.reset_due_monotonic = None
         self.runtime.reset = {"status": "closing", "started": self.port.now(), "due": None}
         self.runtime.estimated_position = None
         if self.runtime.command:
@@ -218,10 +226,16 @@ class MotorOperations:
                             raise OperationError("Spodný doraz sa nepotvrdil v časovom limite")
                         await self.port.sleep(1)
                 reset.update(status="dwell", arrival=self.port.now(), due=self.port.now() + 60)
+                self.reset_due_monotonic = self._clock() + 60
                 await self.port.record("reset_dwell", reset.copy())
-                await self._wait_available(max(0, reset["due"] - self.port.now()))
+                await self._wait_available(max(0, self.reset_due_monotonic - self._clock()))
                 reset["status"] = "stopping"
                 await self.port.service("stop_cover", {})
+                available, position = self.port.observe()
+                if not available or (
+                    self.config["position_source"] != "drive_time" and position != 0
+                ):
+                    raise OperationError("Dokončenie resetu sa nepotvrdilo")
                 await self.port.record("reset_stopping", reset.copy())
                 reset.update(status="completed", ended=self.port.now())
                 self.runtime.estimated_position = 0
@@ -250,15 +264,23 @@ class MotorOperations:
                 await self.port.record("reset_failed", reset.copy())
 
     async def _wait_available(self, seconds: float) -> None:
-        due = self.port.now() + seconds
-        while self.port.now() < due:
-            if not self.port.observe()[0]:
+        due = self._clock() + seconds
+        while self._clock() < due:
+            available, position = self.port.observe()
+            if not available:
                 raise OperationError("Žalúzia sa stala nedostupnou")
-            await self.port.sleep(min(1, due - self.port.now()))
+            if (
+                self.runtime.reset
+                and self.runtime.reset.get("status") == "dwell"
+                and self.config["position_source"] != "drive_time"
+                and position != 0
+            ):
+                raise OperationError("Spodný doraz sa počas resetu prestal potvrdzovať")
+            await self.port.sleep(min(1, due - self._clock()))
         if not self.port.observe()[0]:
             raise OperationError("Žalúzia sa stala nedostupnou")
 
-    async def cancel_reset(self) -> None:
+    async def cancel_reset(self, *, reason: str | None = None) -> None:
         if self.reset_task and not self.reset_task.done():
             self.reset_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -272,3 +294,6 @@ class MotorOperations:
                 await self.port.record(
                     "reset_failed" if error else "reset_cancelled", self.runtime.reset.copy()
                 )
+        if reason and self.runtime.reset and self.runtime.reset.get("status") == "cancelled":
+            self.runtime.reset.update(status="interrupted", error=reason)
+            await self.port.record("reset_interrupted", self.runtime.reset.copy())

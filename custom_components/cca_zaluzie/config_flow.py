@@ -19,7 +19,7 @@ def field_selector(spec):
                 min=spec.minimum,
                 max=spec.maximum,
                 mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement=spec.unit or None,
+                **({"unit_of_measurement": spec.unit} if spec.unit else {}),
             )
         )
     if spec.kind == "bool":

@@ -13,6 +13,7 @@ from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
+from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import condition
@@ -47,6 +48,7 @@ class CoverController:
         self.operations = MotorOperations(self.config, self.runtime, self)
         self.store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.contexts: deque[str] = deque(maxlen=100)
+        self._reset_contexts: deque[str] = deque(maxlen=100)
         self._unsubs: list = []
         self._listeners: set = set()
         self._tasks: set[asyncio.Task] = set()
@@ -68,6 +70,9 @@ class CoverController:
 
     def now(self) -> float:
         return dt_util.utcnow().timestamp()
+
+    def monotonic(self) -> float:
+        return asyncio.get_running_loop().time()
 
     async def sleep(self, seconds: float) -> None:
         await asyncio.sleep(seconds)
@@ -96,6 +101,8 @@ class CoverController:
             parent_id=parent.id if parent else None, user_id=parent.user_id if parent else None
         )
         self.contexts.append(context.id)
+        if self.operations.resetting:
+            self._reset_contexts.append(context.id)
         if self.runtime.command:
             self.runtime.command["context_id"] = context.id
         state = self.hass.states.get(self.config["cover_entity"])
@@ -163,6 +170,7 @@ class CoverController:
             self.contexts.append(self.runtime.command["context_id"])
         self.operations.runtime = self.runtime
         await self.operations.restore()
+        self.runtime.stable.clear()
         if self.runtime.pending_dispatch:
             self.runtime.pending_dispatch = None
             await self.record("drive_interrupted", {"reason": "Reštart alebo obnovenie integrácie"})
@@ -188,6 +196,7 @@ class CoverController:
                     self.hass, actions, f"{self.entry.title}: {key}", DOMAIN
                 )
         self._active = True
+        self._unsubs.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._on_cover_service))
         self._last_available, self._last_position = self.observe()
         self._last_usable = self._last_available and (
             self._last_position is not None or self.config["position_source"] == "drive_time"
@@ -209,6 +218,33 @@ class CoverController:
     def _on_state(self, event) -> None:
         if self._active:
             self._spawn(self._state_changed(event))
+
+    @callback
+    def _on_cover_service(self, event) -> None:
+        if (
+            not self.operations.resetting
+            or event.data.get("domain") != "cover"
+            or event.context.id in self._reset_contexts
+        ):
+            return
+        if event.data.get("service") not in (
+            "open_cover",
+            "close_cover",
+            "stop_cover",
+            "set_cover_position",
+            "toggle",
+        ):
+            return
+        targets = event.data.get("service_data", {}).get("entity_id")
+        if isinstance(targets, str):
+            targets = targets.split(",")
+        if targets and self.config["cover_entity"] not in targets and "all" not in targets:
+            return
+        self._spawn(self._interrupt_reset("Externý povel prerušil reset polohy"))
+
+    async def _interrupt_reset(self, reason) -> None:
+        hold_current(self.runtime, self.decision.target, self.decision.mode, explicit=True)
+        await self.operations.cancel_reset(reason=reason)
 
     async def _state_changed(self, event) -> None:
         state = event.data.get("new_state")
@@ -626,6 +662,11 @@ class CoverController:
 
     def snapshot(self) -> dict[str, Any]:
         available, position = self.observe()
+        runtime = self.runtime.to_dict()
+        if self.operations.resetting and self.operations.reset_due_monotonic is not None:
+            runtime["reset"]["due"] = self.now() + max(
+                0, self.operations.reset_due_monotonic - self.monotonic()
+            )
         decision = self.decision.to_dict()
         if self.runtime.pending_dispatch:
             decision["next_at"] = min(
@@ -642,7 +683,7 @@ class CoverController:
             "position": position,
             "config": deepcopy(self.config),
             "decision": decision,
-            "runtime": self.runtime.to_dict(),
+            "runtime": runtime,
             "events": deepcopy(self.history),
             "sensors": {
                 k: {"state": v.state, "attributes": v.attributes}

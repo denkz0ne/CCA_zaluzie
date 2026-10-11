@@ -275,7 +275,9 @@ async def test_stop_cancels_pending_automation_even_when_manual_detection_is_dis
 
     config_entry, calls = entry
     controller = config_entry.runtime_data
-    controller.config.update(drive_delay=3600, manual_enabled=False)
+    controller.config.update(
+        drive_delay=3600, manual_enabled=False, time_enabled=False, evening_enabled=True
+    )
     today = dt_util.now().date().isoformat()
     controller.runtime.logical_days = {"open": today, "close": today}
     controller.runtime.schedule_latched = {"open": True, "close": True}
