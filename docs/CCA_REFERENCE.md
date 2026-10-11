@@ -20,7 +20,7 @@ Every CCA automation requires:
 2. one dedicated `input_text` helper (254-character length in the documented quick start) to store JSON state;
 3. optional sensors/helpers/entities for the enabled features.
 
-A new integration should own persistent configuration and runtime state itself; requiring one manually created helper per blind would be a poor fit for the intended config-flow experience.
+A new integration should own persistent configuration and runtime state itself; requiring one manually created helper per blind would be a poor fit for the intended config-flow experience. CCA's architectural ceiling of one cover per automation and one manually provisioned helper per instance is not a product limit for this integration: support multiple covers/controllers under the integration, shared defaults with per-cover overrides, and HA-managed versioned storage. Retain useful behavioral limits (thresholds, early/late windows, waiting periods, retry bounds, tolerances, etc.) as configurable guardrails where they prevent unsafe or noisy operation; do not remove them merely because storage/UI differ.
 
 ## Cover model, positions, and tilt
 
@@ -30,7 +30,7 @@ A new integration should own persistent configuration and runtime state itself; 
 - **Awning**: reversed position orientation.
 - **Sunshade**: separate type-specific position semantics.
 
-CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The integration must use Home Assistant's cover services/semantics consistently and expose calibrated user targets, rather than assume motor-native direction.
+CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The new integration is explicitly for ordinary vertical blinds/shutters that move up/down. Do not support awnings, exterior sunshades with inverted orientation, venetian slat tilt, or any lamella-angle automation in this project. Use Home Assistant cover semantics consistently and expose calibrated position targets rather than assuming motor-native direction.
 
 ### Position handling
 - Position source can be standard `current_position`, an alternate position attribute, or a custom sensor.
@@ -40,12 +40,8 @@ CCA's numeric values are not always intuitive: for blinds/shutters, open is comm
 - Values for distinct targets should not collide; validate sensible ordering/ranges for the selected cover type.
 - Availability matters: CCA pauses decisions while the cover is unavailable because it cannot safely determine current position. Optional recovery catches up after availability returns.
 
-### Venetian tilt
-- Separate tilt targets for open, close, ventilation and shading.
-- Up to four shading tilt positions selected by sun elevation thresholds.
-- Tilt tolerance, default delay, and tilt reposition feature.
-- Wait mode can be fixed delay or wait-until-idle (useful for devices that ignore tilt commands while the motor moves); idle wait has a timeout.
-- Some integrations need ordering: move the blind, wait for it to become idle, then send tilt. Position and tilt commands may be combined by custom actions for device integrations that support that.
+### Explicitly excluded: lamella / tilt control
+CCA supports tilt targets, up to four sun-elevation-based lamella positions, tilt tolerances, repositioning, wait modes, and ordered/combined position-plus-tilt commands. **None of that is available in CCA_zaluzie.** The only supported actuator axis is the cover's vertical open/close position. CCA sun shading still applies: it moves the whole blind to a configured partial height, with a distinct shading target and the same start/end conditions and lifecycle. The upstream tilt inputs remain in the source inventory below only to make the exclusion auditable.
 
 ## Schedule and ordinary morning/evening control
 
@@ -159,3 +155,36 @@ Do not directly port the blueprint's implementation details as-is: per-cover hel
 ## Source and licensing caution
 
 This repository currently documents observed behavior and design requirements; it does not contain copied upstream YAML or Python. The source blueprint describes itself as open-source and its embedded notice says attribution plus an upstream link are required for modifications. Before copying/adapting any source code, inspect the upstream repository's current license and confirm the permitted reuse and notice obligations. Link to upstream for concepts and maintain clear attribution.
+
+## Capability mapping for CCA_zaluzie
+
+| Upstream capability | Integration treatment |
+|---|---|
+| Morning/evening schedule, early/late windows, workday/non-workday | Preserve behavior; simplify setup with presets and an advanced section |
+| Brightness/sun elevation triggers, stable duration, hysteresis, AND/OR | Preserve logic and expose only enabled sensor fields |
+| Sun shading start/end, azimuth/elevation, brightness, temperatures, forecast/weather, custom conditions | Preserve all applicable CCA branches; shading moves the whole cover to partial height |
+| Ventilation, open/tilted contacts, lockouts, debounce | Preserve; tilted window means contact state only, never slat tilt |
+| Resident/sleep mode | Preserve |
+| Manual override detection, blocking selections, adoption, timeout/reset/return | Preserve |
+| Force open/close/ventilate/shading, force pause, background target tracking/recovery | Preserve priority semantics, document exact pause-versus-emergency policy |
+| Before/after actions, custom actions, fixed/random delays, instance guards | Preserve where HA integration architecture permits; make action failures observable |
+| Restart/outage recovery | Preserve as configurable policy and safely reconcile after restart |
+| Logbook/automation traces and event diagnostics | Replace/add integration-native event history, decision timeline, structured debug logs and diagnostics; keep comparable detail |
+| Position source, calibration, tolerances, unavailable handling | Preserve relevant vertical-position behavior |
+| Cover type: awning/sunshade inverted position | Excluded; this project controls ordinary vertical blinds/shutters only |
+| Lamella tilt, up to four shading tilt bands, tilt wait/reposition | Explicitly excluded |
+
+The aim is **behavioral parity for applicable non-tilt CCA logic**, not a reduced “basic schedule” product. Keep the user-facing setup concise through progressive disclosure; retain advanced logic behind expandable settings. No feature should be quietly dropped: document anything that cannot map cleanly to HA as a decision or issue.
+
+## Diagnostics and observability requirements
+
+CCA's traces, status helper, event records and logbook support make its decisions inspectable. The integration should provide at least:
+- a timeline of planned, pending, executed, cancelled, blocked and failed events;
+- current computed mode/target, last evaluated conditions, winning priority and reasons lower-priority targets lost;
+- sensor/contact values and threshold results used for each decision;
+- configurable structured debug logging, clear warning/error logs, and HA diagnostics download with secrets excluded;
+- per-cover last movement, last manual change/override, next schedule boundary, pending timer and availability;
+- enough event history to inspect behavior over time, with bounded/retention-configurable storage;
+- a direct path from a timeline event to related diagnostic detail, analogous to HA automation traces.
+
+Unknown/unavailable inputs must be recorded as unknown and must not be silently treated as true/false in a way that causes movement.
