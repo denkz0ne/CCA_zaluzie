@@ -171,7 +171,7 @@ This repository currently documents observed behavior and design requirements; i
 | Restart/outage recovery | Preserve as configurable policy and safely reconcile after restart |
 | Logbook/automation traces and event diagnostics | Replace/add integration-native event history, decision timeline, structured debug logs and diagnostics; keep comparable detail |
 | Position source, calibration, tolerances, unavailable handling | Preserve relevant vertical-position behavior |
-| Cover type: awning/sunshade inverted position | Excluded; this project controls ordinary vertical blinds/shutters only |
+| Cover type: awning/sunshade inverted position | Preserve CCA type semantics; user's current hardware is ordinary vertical blinds/shutters |
 | Lamella tilt, up to four shading tilt bands, tilt wait/reposition | Explicitly excluded |
 
 The aim is **behavioral parity for applicable non-tilt CCA logic**, not a reduced “basic schedule” product. Keep the user-facing setup concise through progressive disclosure; retain advanced logic behind expandable settings. No feature should be quietly dropped: document anything that cannot map cleanly to HA as a decision or issue.
