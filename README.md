@@ -1,10 +1,12 @@
 # CCA_zaluzie
 
+<img src="custom_components/cca_zaluzie/brand/icon@2x.png" alt="CCA Žalúzie — deň a noc" width="96" height="96">
+
 Home Assistant custom integration for automated blinds and shutters, with one automation and side-panel row per cover, preserving applicable behavior of Cover Control Automation (CCA) and the dashboard interaction model of Svetlo v tme / Entity Controller.
 
 ## Project status
 
-The installable integration is version **2026.10.0**, for Home Assistant
+The installable integration is version **2026.10.1**, for Home Assistant
 **2026.10.0+**. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
 
@@ -51,6 +53,7 @@ silently restarts after HA restarts.
 ## Documentation and checks
 
 - [Feature mapping and implementation decisions](docs/FEATURE_MATRIX.md)
+- [Integration icon and HA brand assets](docs/BRANDING.md)
 - [Behavior reference](docs/CCA_REFERENCE.md)
 - [Architecture and release acceptance](docs/superpowers/specs/2026-10-11-integration-design.md)
 - [Attribution](ATTRIBUTION.md) · [Changelog](CHANGELOG.md)

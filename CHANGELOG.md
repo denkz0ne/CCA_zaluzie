@@ -1,3 +1,10 @@
+# 2026.10.1
+
+- Approved icon concept 02: balanced day/night sky above a blue roller shutter.
+- Local integration branding: transparent 256/512 px PNG assets and editable SVG.
+- Matching monochrome sidebar icon follows Home Assistant theme and selection color.
+- Repository README and panel heading use the new identity.
+
 # 2026.10.0
 
 First installable release of CCA Žalúzie for Home Assistant 2026.10 or newer.
