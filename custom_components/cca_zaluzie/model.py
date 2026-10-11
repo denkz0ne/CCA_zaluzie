@@ -49,7 +49,8 @@ class Snapshot:
     entities: dict[str, Reading] = field(default_factory=dict)
     forecasts: dict[str, float | None] = field(default_factory=dict)
     calendar_events: list[dict] = field(default_factory=list)
-    gates: dict[str, bool | None] = field(default_factory=dict)
+    gates: dict[str, Any] = field(default_factory=dict)
+    forecast_conditions: dict[str, str | None] = field(default_factory=dict)
 
     def get(self, entity: str) -> Reading:
         return self.entities.get(entity, Reading("unknown"))
@@ -59,9 +60,16 @@ class Snapshot:
 class Runtime:
     base_target: float | None = None
     base_action: str = "idle"
+    base_owned: bool = False
+    logical_days: dict[str, str] = field(default_factory=dict)
+    schedule_latched: dict[str, bool] = field(default_factory=dict)
     days: dict[str, str] = field(default_factory=dict)
     stable: dict[str, float] = field(default_factory=dict)
     shading: bool = False
+    shade_started_day: str | None = None
+    close_keep_shade: bool = False
+    transition_action: str | None = None
+    keep_full_tilt: bool = False
     pending: str | None = None
     pending_since: float | None = None
     pending_due: float | None = None
@@ -71,6 +79,7 @@ class Runtime:
     manual_position: float | None = None
     estimated_position: float | None = None
     hold_signature: list | None = None
+    hold_explicit: bool = False
     last_force: str | None = None
     last_resident: bool | None = None
     last_window: str = "closed"

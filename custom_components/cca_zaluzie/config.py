@@ -457,6 +457,50 @@ _f(
 _f("history_limit", "Najviac uložených udalostí", 2000, group="records", minimum=100, maximum=10000)
 
 
+_f(
+    "sun_threshold_mode",
+    "Výpočet hranice výšky slnka",
+    "fixed",
+    "select",
+    "light",
+    options=("fixed", "dynamic", "hybrid"),
+    help="Pevná hranica, hodnota senzora alebo senzor plus pevný posun.",
+)
+for key, label, group in [
+    ("open_once", "Otvoriť automaticky iba raz denne", "schedule"),
+    ("close_once", "Zatvoriť automaticky iba raz denne", "schedule"),
+    ("shade_once", "Začať tienenie iba raz denne", "shading"),
+    ("prevent_higher_close", "Pri večernom zatvorení nezdvíhať", "cover"),
+    ("prevent_lower_close_shaded", "Večer zachovať výšku tienenia", "cover"),
+    ("prevent_shade_end_closed", "Neukončiť tienenie už zatvorenej žalúzie", "shading"),
+    ("prevent_open_shade_end", "Po tienení neotvárať", "shading"),
+    ("prevent_open_vent_end", "Po vetraní neotvárať", "windows"),
+    ("vent_start_no_delay", "Vetranie bez oneskorenia jazdy", "windows"),
+    ("vent_return_delay", "Po zatvorení okna použiť oneskorenie jazdy", "windows"),
+    ("vent_lower_from_above", "Pri vyklopení znížiť vyššiu polohu na vetranie", "windows"),
+    ("vent_after_shade", "Po tienení použiť vetraciu polohu", "windows"),
+    ("vent_keep_full_tilt", "Pri prechode otvorené → vyklopené zachovať otvorenie", "windows"),
+]:
+    _f(key, label, False, "bool", group)
+_f(
+    "tilted_blocks",
+    "Vyklopené okno blokuje",
+    [],
+    "multi",
+    "windows",
+    options=("close", "shade_start", "shade_end"),
+)
+FIELDS["forecast_type"] = Field(
+    "forecast_type",
+    "Zdroj predpovede",
+    "daily",
+    "select",
+    "shading",
+    options=("daily", "hourly", "weather_attributes"),
+    help="Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav.",
+)
+
+
 class ConfigError(ValueError):
     """Configuration cannot be safely applied."""
 

@@ -8,7 +8,7 @@ import probatio as vol
 from homeassistant.components import websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import async_register_panel
-from homeassistant.core import callback
+from homeassistant.core import Context, callback
 
 from .config import FIELDS, GROUPS, validate_config
 from .config_flow import async_validate_native
@@ -79,7 +79,9 @@ def ws_get(hass, connection, msg):
 async def ws_control(hass, connection, msg):
     if controller := _get(hass, connection, msg):
         try:
-            await controller.async_control(msg["action"], msg.get("position"))
+            await controller.async_control(
+                msg["action"], msg.get("position"), context=Context(user_id=connection.user.id)
+            )
             connection.send_result(msg["id"], controller.snapshot())
         except Exception as error:
             connection.send_error(msg["id"], "operation_failed", str(error))

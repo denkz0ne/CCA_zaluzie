@@ -7,19 +7,22 @@ import logging
 import random
 from collections import deque
 from contextlib import suppress
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
 from homeassistant.core import Context, HomeAssistant, callback
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import condition
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import (
     async_track_point_in_utc_time,
     async_track_state_change_event,
     async_track_time_interval,
 )
-from homeassistant.helpers.script import Script
+from homeassistant.helpers.script import Script, async_validate_actions_config
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -31,6 +34,7 @@ from .operations import MotorOperations, OperationError
 
 _LOGGER = logging.getLogger(__name__)
 _TERMINAL_RESET = {"reset_completed", "reset_cancelled", "reset_failed"}
+_CONTROL_CONTEXT: ContextVar[Context | None] = ContextVar("cca_control_context", default=None)
 
 
 class CoverController:
@@ -57,6 +61,7 @@ class CoverController:
         self._last_available = True
         self._last_decision = None
         self._forecast: dict = {}
+        self._forecast_conditions: dict = {}
         self._calendar: list = []
 
     def now(self) -> float:
@@ -79,12 +84,15 @@ class CoverController:
             position = Reading(
                 state.state, dict(state.attributes), state.last_changed.timestamp()
             ).number(source)
-        if position is None and state.state in ("closed", "open"):
-            position = 0 if state.state == "closed" else 100
+        if position is not None and not 0 <= position <= 100:
+            position = None
         return True, position
 
     async def service(self, service: str, data: dict) -> None:
-        context = Context()
+        parent = _CONTROL_CONTEXT.get()
+        context = Context(
+            parent_id=parent.id if parent else None, user_id=parent.user_id if parent else None
+        )
         self.contexts.append(context.id)
         if self.runtime.command:
             self.runtime.command["context_id"] = context.id
@@ -155,8 +163,11 @@ class CoverController:
                     self.hass, validated, _LOGGER, f"{self.entry.title}: {key}"
                 )
             elif spec.kind == "action" and self.config[key]:
+                actions = await async_validate_actions_config(
+                    self.hass, cv.SCRIPT_SCHEMA(deepcopy(self.config[key]))
+                )
                 self._scripts[key] = Script(
-                    self.hass, deepcopy(self.config[key]), f"{self.entry.title}: {key}", DOMAIN
+                    self.hass, actions, f"{self.entry.title}: {key}", DOMAIN
                 )
         self._active = True
         self._last_available, self._last_position = self.observe()
@@ -180,12 +191,17 @@ class CoverController:
 
     async def _state_changed(self, event) -> None:
         state = event.data.get("new_state")
-        if event.data["entity_id"] == self.config["cover_entity"] and state is not None:
+        feedback_entities = {self.config["cover_entity"]}
+        if self.config["position_source"] == "sensor":
+            feedback_entities.add(self.config["position_sensor"])
+        if event.data["entity_id"] in feedback_entities and state is not None:
             available, position = self.observe()
             context = state.context
             own = context.id in self.contexts or context.parent_id in self.contexts
             command = self.runtime.command
-            active_command = bool(command and command.get("status") in ("requested", "moving"))
+            active_command = bool(
+                command and command.get("status") in ("requested", "moving", "custom_sent")
+            )
             moved = (
                 position is not None
                 and self._last_position is not None
@@ -217,7 +233,17 @@ class CoverController:
 
     async def _refresh_sources(self, _now=None) -> None:
         weather = self.config["forecast_entity"]
-        if weather and self.hass.services.has_service("weather", "get_forecasts"):
+        if weather and self.config["forecast_type"] == "weather_attributes":
+            state = self.hass.states.get(weather)
+            self._forecast[weather] = (
+                Reading(state.state, dict(state.attributes)).number("temperature")
+                if state
+                else None
+            )
+            self._forecast_conditions[weather] = (
+                state.state if state and state.state not in ("unknown", "unavailable") else None
+            )
+        elif weather and self.hass.services.has_service("weather", "get_forecasts"):
             try:
                 response = await self.hass.services.async_call(
                     "weather",
@@ -227,10 +253,14 @@ class CoverController:
                     return_response=True,
                 )
                 forecasts = response.get(weather, {}).get("forecast", [])
-                values = [Reading(str(f.get("temperature", "unknown"))).number() for f in forecasts]
-                self._forecast[weather] = max((x for x in values if x is not None), default=None)
+                forecast = forecasts[0] if forecasts else {}
+                self._forecast[weather] = Reading(
+                    str(forecast.get("temperature", "unknown"))
+                ).number()
+                self._forecast_conditions[weather] = forecast.get("condition")
             except Exception as error:
                 self._forecast[weather] = None
+                self._forecast_conditions[weather] = None
                 _LOGGER.warning("%s forecast unavailable: %s", self.entry.title, error)
         calendar = self.config["calendar_entity"]
         if (
@@ -244,7 +274,9 @@ class CoverController:
                     "get_events",
                     {
                         "entity_id": calendar,
-                        "start_date_time": dt_util.now().isoformat(),
+                        "start_date_time": dt_util.now()
+                        .replace(hour=0, minute=0, second=0, microsecond=0)
+                        .isoformat(),
                         "end_date_time": (dt_util.now() + timedelta(days=2)).isoformat(),
                     },
                     blocking=True,
@@ -267,18 +299,18 @@ class CoverController:
                         state.state, dict(state.attributes), state.last_changed.timestamp()
                     )
         gates = {}
-        variables = {
-            "cover_entity": self.config["cover_entity"],
-            "target": self.decision.target,
-            "reason": self.decision.reason,
-        }
         for key, checker in self._checks.items():
             event = "global" if key == "global_conditions" else key.removesuffix("_conditions")
-            try:
-                gates[event] = bool(checker(variables))
-            except Exception:
-                gates[event] = None
-        return Snapshot(entities, self._forecast, self._calendar, gates)
+            gates[event] = lambda target, reason, checker=checker: bool(
+                checker(
+                    {
+                        "cover_entity": self.config["cover_entity"],
+                        "target": target,
+                        "reason": reason,
+                    }
+                )
+            )
+        return Snapshot(entities, self._forecast, self._calendar, gates, self._forecast_conditions)
 
     async def async_evaluate(self) -> None:
         if not self._active:
@@ -346,6 +378,10 @@ class CoverController:
 
     async def _dispatch(self, target: float, mode: str, action: str) -> None:
         delay = self.config["drive_delay"] + random.uniform(0, self.config["drive_random"])
+        if action == "ventilate" and self.config["vent_start_no_delay"]:
+            delay = 0
+        if action == "ventilate_end" and not self.config["vent_return_delay"]:
+            delay = 0
         try:
             if delay:
                 await self.record("drive_pending", {"target": target, "due": self.now() + delay})
@@ -356,6 +392,20 @@ class CoverController:
                     "drive_cancelled",
                     {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"},
                 )
+                return
+            _, observed = self.observe()
+            previous = self.runtime.command or {}
+            already_handled = (
+                previous.get("status") in ("custom_sent", "completed", "estimated")
+                and previous.get("target") == target
+                and previous.get("action") == action
+            )
+            if (
+                observed is not None and abs(observed - target) <= self.config["position_tolerance"]
+            ) or already_handled:
+                if self.runtime.transition_action == action:
+                    self.runtime.transition_action = None
+                    await self.record("target_adopted", {"target": target, "action": action})
                 return
             await self._run_script(f"{action}_before")
             # Before-actions may change pause, contacts or availability. Recheck immediately.
@@ -370,10 +420,29 @@ class CoverController:
                 if f"{action}_after" not in self._scripts:
                     raise OperationError("Pre tento pohyb nie je nastavená vlastná akcia")
                 await self._run_script(f"{action}_after")
+                self.runtime.command = {
+                    "target": target,
+                    "action": action,
+                    "mode": mode,
+                    "status": "custom_sent",
+                    "started": self.now(),
+                    "deadline": self.now() + self.config["movement_timeout"],
+                }
                 await self.record("custom_action_completed", {"target": target, "action": action})
-            elif await self.operations.command(target):
-                await self._run_script(f"{action}_after")
-            if self.runtime.manual_since is not None and action not in self.config["manual_blocks"]:
+                moved = True
+            else:
+                moved = await self.operations.command(target)
+                if self.runtime.command:
+                    self.runtime.command["action"] = action
+                if moved:
+                    await self._run_script(f"{action}_after")
+            if self.runtime.transition_action == action:
+                self.runtime.transition_action = None
+            if (
+                moved
+                and self.runtime.manual_since is not None
+                and action not in self.config["manual_blocks"]
+            ):
                 self.runtime.manual_since = None
             self._arm_timer()
         except asyncio.CancelledError:
@@ -478,7 +547,28 @@ class CoverController:
             "server_time": self.now(),
         }
 
-    async def async_control(self, action: str, position: float | None = None) -> None:
+    async def async_control(
+        self, action: str, position: float | None = None, *, context: Context | None = None
+    ) -> None:
+        if context and context.user_id:
+            user = await self.hass.auth.async_get_user(context.user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized()
+        token = _CONTROL_CONTEXT.set(context)
+        try:
+            await self._async_control(action, position)
+        finally:
+            _CONTROL_CONTEXT.reset(token)
+
+    async def _async_control(self, action: str, position: float | None = None) -> None:
+        if (
+            action in ("reset", "stop", "open", "close", "shade", "ventilate", "position")
+            and self._dispatch_task
+            and not self._dispatch_task.done()
+        ):
+            self._dispatch_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._dispatch_task
         if action == "reset":
             if self._dispatch_task and not self._dispatch_task.done():
                 self._dispatch_task.cancel()
@@ -490,6 +580,7 @@ class CoverController:
         elif action == "stop":
             await self.operations.stop()
             mark_manual(self.config, self.runtime, self.observe()[1], dt_util.now())
+            hold_current(self.runtime, self.decision.target, self.decision.mode, explicit=True)
         elif action in ("open", "close", "shade", "ventilate", "position"):
             targets = {
                 "open": self.config["open_position"],
@@ -503,10 +594,12 @@ class CoverController:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
             await self.operations.command(target, force=True)
             mark_manual(self.config, self.runtime, target, dt_util.now())
+            hold_current(self.runtime, self.decision.target, self.decision.mode, explicit=True)
             await self.record("manual_requested", {"target": target})
         elif action in ("clear_override", "reconcile"):
             self.runtime.manual_since = None
             self.runtime.hold_signature = None
+            self.runtime.hold_explicit = False
             if action == "reconcile":
                 self.runtime.command = None
                 self.runtime.fault = None

@@ -175,3 +175,138 @@ async def test_clear_override_does_not_break_controller(hass, entry):
     config_entry.runtime_data.runtime.manual_since = dt_util.utcnow().timestamp()
     await config_entry.runtime_data.async_control("clear_override")
     assert config_entry.runtime_data.runtime.manual_since is None
+
+
+async def test_selected_position_sensor_completes_a_command(hass, entry):
+    config_entry, _ = entry
+    hass.states.async_set("sensor.feedback", "100")
+    options = {
+        **config_entry.runtime_data.config,
+        "position_source": "sensor",
+        "position_sensor": "sensor.feedback",
+    }
+    hass.config_entries.async_update_entry(config_entry, options=options)
+    await hass.async_block_till_done()
+    controller = config_entry.runtime_data
+    await controller.operations.command(58)
+    hass.states.async_set("sensor.feedback", "58")
+    await hass.async_block_till_done()
+    assert controller.runtime.command["status"] == "completed"
+    assert controller.runtime.manual_since is None
+
+
+async def test_unknown_selected_sensor_is_not_replaced_by_cover_position(hass, entry):
+    config_entry, _ = entry
+    hass.states.async_set("sensor.feedback", "unavailable")
+    hass.config_entries.async_update_entry(
+        config_entry,
+        options={
+            **config_entry.runtime_data.config,
+            "position_source": "sensor",
+            "position_sensor": "sensor.feedback",
+        },
+    )
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.observe() == (True, None)
+    assert config_entry.runtime_data.decision.inhibit == "position_unknown"
+
+
+async def test_fast_service_feedback_does_not_regress_completed_to_moving(hass, entry):
+    import asyncio
+
+    config_entry, _ = entry
+
+    async def move(call):
+        hass.states.async_set(
+            "cover.blind",
+            "open",
+            {"current_position": call.data["position"], "supported_features": 15},
+            context=call.context,
+        )
+        await asyncio.sleep(0)
+
+    hass.services.async_register("cover", "set_cover_position", move)
+    await config_entry.runtime_data.operations.command(58)
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.runtime.command["status"] == "completed"
+
+
+async def test_native_action_alias_and_template_are_normalized(hass, entry):
+    config_entry, _ = entry
+    values = []
+
+    async def capture(call):
+        values.append(call.data["value"])
+
+    hass.services.async_register("test", "capture", capture)
+    options = {
+        **config_entry.runtime_data.config,
+        "open_after": [{"action": "test.capture", "data": {"value": "{{ target }}"}}],
+    }
+    hass.config_entries.async_update_entry(config_entry, options=options)
+    await hass.async_block_till_done()
+    controller = config_entry.runtime_data
+    controller.decision.target = 100
+    await controller._run_script("open_after")
+    assert values == [100]
+
+
+async def test_generic_ha_service_cannot_bypass_panel_admin_permissions(
+    hass, entry, hass_ws_client, hass_read_only_access_token
+):
+    config_entry, calls = entry
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "call_service",
+            "domain": DOMAIN,
+            "service": "control",
+            "service_data": {"entry_id": config_entry.entry_id, "action": "close"},
+        }
+    )
+    result = await client.receive_json()
+    assert result["success"] is False
+    assert calls == []
+
+
+async def test_stop_cancels_pending_automation_even_when_manual_detection_is_disabled(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config.update(drive_delay=3600, manual_enabled=False)
+    today = dt_util.now().date().isoformat()
+    controller.runtime.logical_days = {"open": today, "close": today}
+    controller.runtime.schedule_latched = {"open": True, "close": True}
+    controller.runtime.base_target = 0
+    controller.runtime.base_action = "close"
+    controller.runtime.base_owned = True
+    controller.runtime.hold_signature = None
+    await controller.async_evaluate()
+    await asyncio.sleep(0)
+    await controller.async_control("stop")
+    await hass.async_block_till_done()
+    assert [call.service for call in calls] == ["stop_cover"]
+    assert controller._dispatch_task.done()
+
+
+async def test_options_reload_cancels_reset_and_attempts_stop(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    gate = asyncio.Event()
+
+    async def wait(_seconds):
+        await gate.wait()
+
+    controller.sleep = wait
+    await controller.async_control("reset")
+    await asyncio.sleep(0)
+    hass.config_entries.async_update_entry(
+        config_entry, options={**controller.config, "position_tolerance": 3}
+    )
+    await hass.async_block_till_done()
+    assert calls[-1].service == "stop_cover"
+    assert config_entry.runtime_data.runtime.reset["status"] == "cancelled"

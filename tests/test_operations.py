@@ -202,3 +202,88 @@ async def test_completed_estimate_does_not_repeat_without_new_target():
     op = motor(port, position_source="drive_time", drive_time=1)
     await op.command(0)
     assert await op.command(0) is False
+
+
+async def test_stop_interrupts_active_timed_motion_without_waiting_for_drive_time():
+    port = Port()
+    port.position = None
+    port.stall = True
+    port.sleep_gate = asyncio.Event()
+    op = motor(port, position_source="drive_time", drive_time=45)
+    move = asyncio.create_task(op.command(0))
+    await asyncio.sleep(0)
+    await asyncio.wait_for(op.stop(), 0.2)
+    assert port.calls[-1][1] == "stop_cover"
+    assert port.time == 1000
+    assert op.runtime.estimated_position is None
+    assert move.done()
+    if not move.done():
+        move.cancel()
+
+
+async def test_failed_timed_motion_invalidates_the_old_estimate():
+    port = Port()
+    port.position = None
+    port.stall = True
+    op = motor(port, position_source="drive_time", drive_time=45)
+    op.runtime.estimated_position = 100
+    original_sleep = port.sleep
+
+    async def disappear(seconds):
+        await original_sleep(seconds)
+        port.available = False
+
+    port.sleep = disappear
+    with pytest.raises(OperationError):
+        await op.command(0)
+    assert op.runtime.estimated_position is None
+
+
+async def test_reset_confirmation_does_not_use_the_normal_position_tolerance():
+    port = Port()
+    port.stall = True
+    port.position = 100
+    op = motor(port, position_tolerance=100, movement_timeout=5)
+    await op.start_reset()
+    await op.reset_task
+    assert op.runtime.reset["status"] == "failed"
+
+
+async def test_reset_waits_to_absolute_deadline_despite_slow_persistence():
+    port = Port()
+    op = motor(port)
+    original_record = port.record
+
+    async def slow(event, details):
+        await original_record(event, details)
+        if event in ("reset_dwell", "reset_stopping"):
+            port.time += 3
+
+    port.record = slow
+    await op.start_reset()
+    await op.reset_task
+    assert port.calls[-1][0] == 1060
+
+
+async def test_cancel_during_initial_reset_persistence_never_sends_close_after_stop():
+    port = Port()
+    op = motor(port)
+    original_record = port.record
+    saving, gate = asyncio.Event(), asyncio.Event()
+
+    async def slow(event, details):
+        if event == "reset_started":
+            saving.set()
+            await gate.wait()
+        await original_record(event, details)
+
+    port.record = slow
+    start = asyncio.create_task(op.start_reset())
+    await saving.wait()
+    await op.cancel_reset()
+    gate.set()
+    await start
+    if op.reset_task:
+        await op.reset_task
+    assert [service for _, service, _ in port.calls] == ["stop_cover"]
+    assert op.runtime.reset["status"] == "cancelled"

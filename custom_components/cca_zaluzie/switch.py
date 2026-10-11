@@ -17,7 +17,7 @@ class CCASwitch(CCAEntity, SwitchEntity):
         return self.controller.config["enabled"]
 
     async def async_turn_on(self, **kwargs):
-        await self.controller.async_control("enable")
+        await self.controller.async_control("enable", context=self._context)
 
     async def async_turn_off(self, **kwargs):
-        await self.controller.async_control("disable")
+        await self.controller.async_control("disable", context=self._context)

@@ -27,4 +27,4 @@ class CCAButton(CCAEntity, ButtonEntity):
         self.action = action
 
     async def async_press(self):
-        await self.controller.async_control(self.action)
+        await self.controller.async_control(self.action, context=self._context)

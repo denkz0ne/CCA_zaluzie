@@ -69,7 +69,9 @@
           "lockout_position": "Otvorené okno",
           "position_tolerance": "Tolerancia",
           "drive_time": "Čas úplnej jazdy",
-          "movement_timeout": "Čas na potvrdenie pohybu"
+          "movement_timeout": "Čas na potvrdenie pohybu",
+          "prevent_higher_close": "Pri večernom zatvorení nezdvíhať",
+          "prevent_lower_close_shaded": "Večer zachovať výšku tienenia"
         },
         "data_description": {
           "cover_type": "Markíza a slnečná clona používajú obrátené cieľové polohy podľa CCA.",
@@ -96,7 +98,9 @@
           "calendar_entity": "Kalendár",
           "calendar_enabled": "Riadiť podľa kalendára",
           "calendar_open_title": "Názov udalosti otvorenia",
-          "calendar_close_title": "Názov udalosti zatvorenia"
+          "calendar_close_title": "Názov udalosti zatvorenia",
+          "open_once": "Otvoriť automaticky iba raz denne",
+          "close_once": "Zatvoriť automaticky iba raz denne"
         },
         "data_description": {}
       },
@@ -118,9 +122,12 @@
           "sun_close_sensor": "Vlastná hranica zatvorenia",
           "sun_duration": "Potvrdenie výšky slnka",
           "sun_direction": "Smer pohybu slnka",
-          "light_operator": "Kombinácia svetla a slnka"
+          "light_operator": "Kombinácia svetla a slnka",
+          "sun_threshold_mode": "Výpočet hranice výšky slnka"
         },
-        "data_description": {}
+        "data_description": {
+          "sun_threshold_mode": "Pevná hranica, hodnota senzora alebo senzor plus pevný posun."
+        }
       },
       "shading": {
         "title": "Tienenie",
@@ -157,19 +164,23 @@
           "temperature1_hysteresis": "Hysterézia teploty 1",
           "temperature2_hysteresis": "Hysterézia teploty 2",
           "forecast_hysteresis": "Hysterézia predpovede",
-          "forecast_type": "Typ predpovede",
+          "forecast_type": "Zdroj predpovede",
           "shade_weather": "Podmienky počasia",
           "shade_independent": "Nezávislé tienenie podľa teploty",
           "shade_compare_sensor2": "Zohľadniť teplotu 2 nezávisle",
           "shade_hold_hot": "Pri vysokej teplote udržať tienenie",
           "shade_end_immediate": "Ukončiť ihneď mimo slnečného rozsahu",
-          "shade_alt_position": "Alternatívna poloha tienenia"
+          "shade_alt_position": "Alternatívna poloha tienenia",
+          "shade_once": "Začať tienenie iba raz denne",
+          "prevent_shade_end_closed": "Neukončiť tienenie už zatvorenej žalúzie",
+          "prevent_open_shade_end": "Po tienení neotvárať"
         },
         "data_description": {
           "shade_start_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
           "shade_start_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
           "shade_end_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
-          "shade_end_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR."
+          "shade_end_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
+          "forecast_type": "Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav."
         }
       },
       "windows": {
@@ -182,7 +193,14 @@
           "contact_delay": "Potvrdenie spúšťača kontaktu",
           "contact_state_delay": "Oneskorenie stavu kontaktu",
           "tilted_lockout": "Blokácia pri vyklopení",
-          "shading_over_ventilation": "Uprednostniť tienenie pred vetraním"
+          "shading_over_ventilation": "Uprednostniť tienenie pred vetraním",
+          "prevent_open_vent_end": "Po vetraní neotvárať",
+          "vent_start_no_delay": "Vetranie bez oneskorenia jazdy",
+          "vent_return_delay": "Po zatvorení okna použiť oneskorenie jazdy",
+          "vent_lower_from_above": "Pri vyklopení znížiť vyššiu polohu na vetranie",
+          "vent_after_shade": "Po tienení použiť vetraciu polohu",
+          "vent_keep_full_tilt": "Pri prechode otvorené → vyklopené zachovať otvorenie",
+          "tilted_blocks": "Vyklopené okno blokuje"
         },
         "data_description": {
           "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia."

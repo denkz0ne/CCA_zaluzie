@@ -6,6 +6,7 @@ import probatio as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.service import async_register_admin_service
 
 from .const import DOMAIN, PLATFORMS
 from .controller import CoverController
@@ -19,11 +20,14 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
         if controller is None:
             raise HomeAssistantError("Žalúzia nie je načítaná")
         try:
-            await controller.async_control(call.data["action"], call.data.get("position"))
+            await controller.async_control(
+                call.data["action"], call.data.get("position"), context=call.context
+            )
         except ValueError as error:
             raise HomeAssistantError(str(error)) from error
 
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         "control",
         control,
@@ -66,6 +70,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception:
         await controller.async_stop()
         hass.data[DOMAIN]["controllers"].pop(entry.entry_id, None)
+        from .const import EVENT_UPDATED
+
+        hass.bus.async_fire(EVENT_UPDATED, {"entry_id": entry.entry_id})
         raise
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True

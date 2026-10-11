@@ -26,6 +26,7 @@ class MotorOperations:
         self.config, self.runtime, self.port = config, runtime, port
         self.lock = asyncio.Lock()
         self.reset_task: asyncio.Task | None = None
+        self.motion_task: asyncio.Task | None = None
 
     @property
     def resetting(self) -> bool:
@@ -36,6 +37,7 @@ class MotorOperations:
 
     async def restore(self) -> None:
         if self.resetting:
+            self.runtime.estimated_position = None
             self.runtime.reset.update(
                 status="interrupted",
                 ended=self.port.now(),
@@ -43,6 +45,7 @@ class MotorOperations:
             )
             await self.port.record("reset_interrupted", self.runtime.reset.copy())
         if self.runtime.command and self.runtime.command.get("status") in ("requested", "moving"):
+            self.runtime.estimated_position = None
             self.runtime.command["status"] = "interrupted"
             await self.port.record("command_interrupted", self.runtime.command.copy())
 
@@ -98,6 +101,7 @@ class MotorOperations:
             )
             data = {"position": target} if service == "set_cover_position" else {}
             try:
+                self.motion_task = asyncio.current_task()
                 if self.config["position_source"] == "drive_time":
                     previous_position = self.runtime.estimated_position
                     service = (
@@ -130,7 +134,17 @@ class MotorOperations:
                     await self.port.record("command_estimated", command.copy())
                 else:
                     await self.port.service(service, data)
-                    command["status"] = "moving"
+                    _, observed = self.port.observe()
+                    if command["status"] == "requested":
+                        if (
+                            observed is not None
+                            and abs(observed - target) <= self.config["position_tolerance"]
+                        ):
+                            command.update(
+                                status="completed", observed=observed, ended=self.port.now()
+                            )
+                        else:
+                            command["status"] = "moving"
                     await self.port.record("command_sent", command.copy())
             except asyncio.CancelledError:
                 command.update(status="interrupted", ended=self.port.now())
@@ -138,20 +152,30 @@ class MotorOperations:
                 await self.port.record("command_interrupted", command.copy())
                 raise
             except Exception as error:
+                if self.config["position_source"] == "drive_time":
+                    self.runtime.estimated_position = None
                 command.update(status="failed", error=str(error))
                 self.runtime.fault = str(error)
                 await self.port.record("command_failed", command.copy())
                 raise OperationError(str(error)) from error
+            finally:
+                self.motion_task = None
             return True
 
     async def stop(self) -> None:
         if self.resetting:
             await self.cancel_reset()
             return
+        motion = self.motion_task
+        if motion and motion is not asyncio.current_task() and not motion.done():
+            motion.cancel()
+            with suppress(asyncio.CancelledError):
+                await motion
         async with self.lock:
             await self.port.service("stop_cover", {})
             if self.runtime.command:
                 self.runtime.command["status"] = "cancelled"
+            self.runtime.estimated_position = None
             await self.port.record("command_stopped", {})
 
     async def start_reset(self) -> None:
@@ -160,8 +184,10 @@ class MotorOperations:
         if not self.port.observe()[0]:
             raise OperationError("Žalúzia nie je dostupná")
         self.runtime.reset = {"status": "closing", "started": self.port.now(), "due": None}
-        # Persist operation ownership before any motor call or awaitable task scheduling.
-        await self.port.record("reset_started", self.runtime.reset.copy())
+        self.runtime.estimated_position = None
+        if self.runtime.command:
+            self.runtime.command["status"] = "cancelled"
+        # Task ownership exists before its first persistence await, so cancel cannot be lost.
         self.reset_task = asyncio.create_task(self._reset())
 
     async def _safe_stop(self) -> str | None:
@@ -175,6 +201,7 @@ class MotorOperations:
         reset = self.runtime.reset
         async with self.lock:
             try:
+                await self.port.record("reset_started", reset.copy())
                 await self.port.service("close_cover", {})
                 started = self.port.now()
                 if self.config["position_source"] == "drive_time":
@@ -185,17 +212,17 @@ class MotorOperations:
                         if not available:
                             raise OperationError("Žalúzia sa stala nedostupnou")
                         # Close service follows HA semantics (fully closed = 0), even for an awning.
-                        if position is not None and position <= self.config["position_tolerance"]:
+                        if position == 0:
                             break
                         if self.port.now() - started >= self.config["movement_timeout"]:
                             raise OperationError("Spodný doraz sa nepotvrdil v časovom limite")
                         await self.port.sleep(1)
                 reset.update(status="dwell", arrival=self.port.now(), due=self.port.now() + 60)
                 await self.port.record("reset_dwell", reset.copy())
-                await self._wait_available(60)
+                await self._wait_available(max(0, reset["due"] - self.port.now()))
                 reset["status"] = "stopping"
-                await self.port.record("reset_stopping", reset.copy())
                 await self.port.service("stop_cover", {})
+                await self.port.record("reset_stopping", reset.copy())
                 reset.update(status="completed", ended=self.port.now())
                 self.runtime.estimated_position = 0
                 self.runtime.fault = None

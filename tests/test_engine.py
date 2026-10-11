@@ -300,10 +300,12 @@ def test_contact_release_delay_rearms_after_a_second_open():
     opened = world(**{"binary_sensor.window": Reading("on")})
     closed = world(**{"binary_sensor.window": Reading("off")})
     evaluate(cfg, rt, opened, NOW)
-    evaluate(cfg, rt, closed, NOW + timedelta(seconds=1))
+    evaluate(cfg, rt, opened, NOW + timedelta(seconds=10))
     evaluate(cfg, rt, closed, NOW + timedelta(seconds=11))
-    evaluate(cfg, rt, opened, NOW + timedelta(seconds=12))
-    assert evaluate(cfg, rt, closed, NOW + timedelta(seconds=13)).mode == "window_lockout"
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=21))
+    evaluate(cfg, rt, opened, NOW + timedelta(seconds=22))
+    evaluate(cfg, rt, opened, NOW + timedelta(seconds=32))
+    assert evaluate(cfg, rt, closed, NOW + timedelta(seconds=33)).mode == "window_lockout"
 
 
 def test_manual_adoption_uses_live_workday_selection():
@@ -328,3 +330,141 @@ def test_unknown_required_sun_sensor_cannot_end_active_shading():
         evaluate(cfg, rt, world(**{"sun.sun": Reading("unavailable")}), NOW.replace(hour=13)).mode
         == "shading"
     )
+
+
+def test_calendar_uses_event_end_as_late_fallback():
+    cfg = config(
+        calendar_enabled=True,
+        calendar_entity="calendar.day",
+        lux_enabled=True,
+        lux_sensor="sensor.lux",
+    )
+    rt = Runtime()
+    snap = world(**{"sensor.lux": Reading("0")})
+    snap.calendar_events = [
+        {"summary": "open", "start": NOW.isoformat(), "end": (NOW + timedelta(hours=1)).isoformat()}
+    ]
+    assert evaluate(cfg, rt, snap, NOW).target is None
+    assert evaluate(cfg, rt, snap, NOW + timedelta(hours=1)).target == 100
+
+
+def test_shading_end_groups_are_alternative_paths():
+    cfg = shade_config(
+        shade_start_delay=0,
+        shade_end_delay=0,
+        shade_end_and=["azimuth"],
+        shade_end_or=["brightness"],
+    )
+    rt = Runtime()
+    evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12))
+    assert evaluate(cfg, rt, shaded_world(azimuth=300), NOW.replace(hour=13)).mode != "shading"
+
+
+def test_declined_end_condition_remains_owner_on_later_evaluations():
+    cfg = config(
+        shading_enabled=True, shade_lux_sensor="sensor.lux", shade_start_delay=0, shade_end_delay=0
+    )
+    rt = Runtime()
+    evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12))
+    snap = shaded_world("10000")
+    snap.gates = {"shade_end": False, "open": True}
+    assert evaluate(cfg, rt, snap, NOW.replace(hour=13)).action == "shade_end"
+    later = evaluate(cfg, rt, snap, NOW.replace(hour=13) + timedelta(seconds=1))
+    assert later.action == "shade_end" and later.inhibit == "condition"
+
+
+def test_gate_receives_the_current_candidate_target():
+    cfg = config()
+    snap = world()
+    snap.gates = {"global": lambda target, reason: target == 100}
+    result = evaluate(cfg, Runtime(), snap, NOW.replace(hour=22))
+    assert result.target == 0 and result.inhibit == "condition"
+    assert evaluate(cfg, Runtime(), snap, NOW).inhibit is None
+
+
+def test_seconds_in_time_window_are_preserved():
+    cfg = config(morning_early="07:00:45", morning_late="08:00")
+    assert evaluate(cfg, Runtime(), world(), NOW).target is None
+    assert evaluate(cfg, Runtime(), world(), NOW + timedelta(seconds=45)).target == 100
+
+
+def test_hybrid_sun_threshold_adds_sensor_and_fixed_offset():
+    cfg = config(
+        sun_enabled=True,
+        sun_threshold_mode="hybrid",
+        sun_open=2,
+        sun_open_sensor="sensor.threshold",
+        sun_duration=0,
+    )
+    snap = world(
+        **{"sensor.threshold": Reading("5"), "sun.sun": Reading("above_horizon", {"elevation": 6})}
+    )
+    assert evaluate(cfg, Runtime(), snap, NOW).target is None
+
+
+def test_evening_guard_does_not_raise_a_lower_cover():
+    cfg = config(close_position=50, prevent_higher_close=True)
+    snap = world()
+    snap.entities["cover.blind"] = Reading("open", {"current_position": 20})
+    assert evaluate(cfg, Runtime(), snap, NOW.replace(hour=22)).inhibit == "behavior_guard"
+
+
+def test_optional_unconfigured_shading_sensor_is_skipped_but_unknown_configured_one_is_not():
+    cfg = shade_config(shade_start_delay=0, shade_start_and=["azimuth", "temperature1"])
+    assert evaluate(cfg, Runtime(), shaded_world(), NOW.replace(hour=12)).mode == "shading"
+    cfg["temperature_sensor1"] = "sensor.missing"
+    assert evaluate(cfg, Runtime(), shaded_world(), NOW.replace(hour=12)).mode != "shading"
+
+
+def test_resident_open_protection_does_not_create_an_unrequested_close():
+    cfg = config(
+        resident_sensor="binary_sensor.sleep", resident_close=False, resident_allow_open=False
+    )
+    result = evaluate(cfg, Runtime(), world(**{"binary_sensor.sleep": Reading("on")}), NOW)
+    assert result.target == 100 and result.inhibit == "resident_open"
+
+
+def test_disabled_evening_progresses_base_without_owning_motor_dispatch():
+    cfg = config(evening_enabled=False)
+    rt = Runtime()
+    evaluate(cfg, rt, world(), NOW)
+    result = evaluate(cfg, rt, world(), NOW.replace(hour=22))
+    assert rt.base_target == 0
+    assert result.inhibit == "unowned_target"
+
+
+def test_repeated_sensor_open_is_configurable():
+    cfg = config(
+        time_enabled=False,
+        lux_enabled=True,
+        lux_sensor="sensor.lux",
+        lux_duration=0,
+        open_once=False,
+        close_once=False,
+    )
+    rt = Runtime()
+    assert evaluate(cfg, rt, world(**{"sensor.lux": Reading("200")}), NOW).target == 100
+    assert (
+        evaluate(cfg, rt, world(**{"sensor.lux": Reading("0")}), NOW + timedelta(minutes=1)).target
+        == 0
+    )
+    assert (
+        evaluate(
+            cfg, rt, world(**{"sensor.lux": Reading("200")}), NOW + timedelta(minutes=2)
+        ).target
+        == 100
+    )
+
+
+def test_normal_forecast_gate_can_use_second_temperature_sensor():
+    cfg = shade_config(
+        shade_start_and=["forecast"],
+        shade_start_delay=0,
+        forecast_min=25,
+        forecast_hysteresis=1,
+        shade_compare_sensor2=True,
+        temperature_sensor2="sensor.temp",
+        forecast_temp_sensor="sensor.forecast",
+    )
+    snap = shaded_world(**{"sensor.temp": Reading("30"), "sensor.forecast": Reading("20")})
+    assert evaluate(cfg, Runtime(), snap, NOW.replace(hour=12)).mode == "shading"
