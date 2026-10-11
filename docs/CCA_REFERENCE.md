@@ -30,7 +30,7 @@ A new integration should own persistent configuration and runtime state itself; 
 - **Awning**: reversed position orientation.
 - **Sunshade**: separate type-specific position semantics.
 
-CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The new integration is explicitly for ordinary vertical blinds/shutters that move up/down. Do not support awnings, exterior sunshades with inverted orientation, venetian slat tilt, or any lamella-angle automation in this project. Use Home Assistant cover semantics consistently and expose calibrated position targets rather than assuming motor-native direction.
+CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The user's current hardware is ordinary vertical blinds/shutters that move up/down. The only confirmed feature exclusion from CCA is venetian slat tilt / lamella-angle automation. Preserve other CCA cover-type semantics, including orientation handling, as applicable. Use Home Assistant cover semantics consistently and expose calibrated position targets rather than assuming motor-native direction.
 
 ### Position handling
 - Position source can be standard `current_position`, an alternate position attribute, or a custom sensor.
@@ -148,7 +148,7 @@ Exact input IDs in the captured upstream source, grouped for research. The YAML 
 
 ## What to reuse and what not to cargo-cult
 
-Reuse as **behavioral requirements**: target arbitration, pending/re-check timers, hysteresis/debounce, manual override semantics, window lockouts, pause/force priority, idempotent movement, tilt sequencing, recoverability and transparent explanations.
+Reuse as **behavioral requirements**: target arbitration, pending/re-check timers, hysteresis/debounce, manual override semantics, window lockouts, pause/force priority, idempotent movement, movement sequencing, recoverability and transparent explanations.
 
 Do not directly port the blueprint's implementation details as-is: per-cover helper requirement, automation trace as main diagnostic UI, compact JSON status keys, YAML selector organization, automation variables/branching patterns, or all 100+ inputs on one configuration form. The integration should offer progressive configuration and a clean per-cover model.
 
@@ -174,7 +174,7 @@ This repository currently documents observed behavior and design requirements; i
 | Cover type: awning/sunshade inverted position | Preserve CCA type semantics; user's current hardware is ordinary vertical blinds/shutters |
 | Lamella tilt, up to four shading tilt bands, tilt wait/reposition | Explicitly excluded |
 
-The aim is **behavioral parity for applicable non-tilt CCA logic**, not a reduced “basic schedule” product. Keep the user-facing setup concise through progressive disclosure; retain advanced logic behind expandable settings. No feature should be quietly dropped: document anything that cannot map cleanly to HA as a decision or issue.
+The aim is **behavioral parity with CCA except for lamella/tilt automation**, not a reduced “basic schedule” product. Keep the user-facing setup concise through progressive disclosure; retain advanced logic behind expandable settings. No feature should be quietly dropped: document anything that cannot map cleanly to HA as a decision or issue.
 
 ## Diagnostics and observability requirements
 
