@@ -10,6 +10,8 @@ Research and design only. No integration code has been implemented yet.
 
 - [Implementation brief](docs/INTEGRATION_BRIEF.md) — user intent, UI model, proposed runtime architecture and delivery approach.
 - [CCA behavior reference](docs/CCA_REFERENCE.md) — researched CCA behavior, state mechanics, feature inventory and upstream snapshot.
+- [Latest interactive UI prototype](docs/ui/CCA_zaluzie_UI.html) — overview and per-cover configuration.
+- [UI layout requirements](docs/ui/README.md)
 - [Agent instructions](AGENTS.md)
 
 ## References
