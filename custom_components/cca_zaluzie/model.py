@@ -60,6 +60,7 @@ class Runtime:
     expired: list[str] = field(default_factory=list)
     manual_since: float | None = None
     manual_position: float | None = None
+    estimated_position: float | None = None
     hold_signature: list | None = None
     last_force: str | None = None
     last_resident: bool | None = None

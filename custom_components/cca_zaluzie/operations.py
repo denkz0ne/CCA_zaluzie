@@ -1,0 +1,156 @@
+"""Serialized motor protocol with explicit reset completion and interruption."""
+from __future__ import annotations
+
+import asyncio
+from contextlib import suppress
+from typing import Protocol
+
+from .model import Runtime
+
+
+class MotorPort(Protocol):
+    def now(self) -> float: ...
+    async def sleep(self, seconds: float) -> None: ...
+    async def service(self, service: str, data: dict) -> None: ...
+    def observe(self) -> tuple[bool, float | None]: ...
+    async def record(self, event: str, details: dict) -> None: ...
+
+
+class OperationError(ValueError):
+    """Requested operation cannot safely run."""
+
+
+class MotorOperations:
+    def __init__(self, config: dict, runtime: Runtime, port: MotorPort):
+        self.config, self.runtime, self.port = config, runtime, port
+        self.lock = asyncio.Lock()
+        self.reset_task: asyncio.Task | None = None
+
+    @property
+    def resetting(self) -> bool:
+        return bool(self.runtime.reset and self.runtime.reset.get("status") in ("closing", "dwell", "stopping"))
+
+    async def restore(self) -> None:
+        if self.resetting:
+            self.runtime.reset.update(status="interrupted", ended=self.port.now(), error="Reštart alebo prerušenie procesu")
+            await self.port.record("reset_interrupted", self.runtime.reset.copy())
+        if self.runtime.command and self.runtime.command.get("status") in ("requested", "moving"):
+            self.runtime.command["status"] = "interrupted"
+            await self.port.record("command_interrupted", self.runtime.command.copy())
+
+    async def command(self, target: float, *, force: bool = False) -> bool:
+        if self.resetting:
+            raise OperationError("Prebieha reset polohy")
+        async with self.lock:
+            if self.resetting:
+                raise OperationError("Prebieha reset polohy")
+            available, position = self.port.observe()
+            if not available:
+                raise OperationError("Žalúzia nie je dostupná")
+            if position is not None and abs(position - target) <= self.config["position_tolerance"] and not force:
+                return False
+            previous = self.runtime.command
+            if not force and previous and previous.get("target") == target and previous.get("status") in ("requested", "moving"):
+                return False
+            command = {"target": target, "started": self.port.now(), "status": "requested", "deadline": self.port.now() + self.config["movement_timeout"]}
+            self.runtime.command = command
+            await self.port.record("command_requested", command.copy())
+            service = "close_cover" if target == 0 else "open_cover" if target == 100 else "set_cover_position"
+            data = {"position": target} if service == "set_cover_position" else {}
+            try:
+                await self.port.service(service, data)
+                command["status"] = "moving"
+                await self.port.record("command_sent", command.copy())
+            except Exception as error:
+                command.update(status="failed", error=str(error))
+                self.runtime.fault = str(error)
+                await self.port.record("command_failed", command.copy())
+                raise OperationError(str(error)) from error
+            return True
+
+    async def stop(self) -> None:
+        if self.resetting:
+            await self.cancel_reset()
+            return
+        async with self.lock:
+            await self.port.service("stop_cover", {})
+            if self.runtime.command:
+                self.runtime.command["status"] = "cancelled"
+            await self.port.record("command_stopped", {})
+
+    async def start_reset(self) -> None:
+        if self.resetting or self.lock.locked():
+            raise OperationError("Žalúzia už vykonáva inú operáciu")
+        if not self.port.observe()[0]:
+            raise OperationError("Žalúzia nie je dostupná")
+        self.runtime.reset = {"status": "closing", "started": self.port.now(), "due": None}
+        # Persist operation ownership before any motor call or awaitable task scheduling.
+        await self.port.record("reset_started", self.runtime.reset.copy())
+        self.reset_task = asyncio.create_task(self._reset())
+
+    async def _safe_stop(self) -> str | None:
+        try:
+            await self.port.service("stop_cover", {})
+            return None
+        except Exception as error:
+            return str(error)
+
+    async def _reset(self) -> None:
+        reset = self.runtime.reset
+        async with self.lock:
+            try:
+                await self.port.service("close_cover", {})
+                started = self.port.now()
+                if self.config["position_source"] == "drive_time":
+                    await self._wait_available(self.config["drive_time"])
+                else:
+                    while True:
+                        available, position = self.port.observe()
+                        if not available:
+                            raise OperationError("Žalúzia sa stala nedostupnou")
+                        # Close service follows HA semantics (fully closed = 0), even for an awning.
+                        if position is not None and position <= self.config["position_tolerance"]:
+                            break
+                        if self.port.now() - started >= self.config["movement_timeout"]:
+                            raise OperationError("Spodný doraz sa nepotvrdil v časovom limite")
+                        await self.port.sleep(1)
+                reset.update(status="dwell", arrival=self.port.now(), due=self.port.now() + 60)
+                await self.port.record("reset_dwell", reset.copy())
+                await self._wait_available(60)
+                reset["status"] = "stopping"
+                await self.port.record("reset_stopping", reset.copy())
+                await self.port.service("stop_cover", {})
+                reset.update(status="completed", ended=self.port.now())
+                self.runtime.fault = None
+                if self.runtime.command:
+                    self.runtime.command["status"] = "cancelled"
+                await self.port.record("reset_completed", reset.copy())
+            except asyncio.CancelledError:
+                stop_error = await self._safe_stop()
+                reset.update(status="failed" if stop_error else "cancelled", ended=self.port.now(), error=stop_error)
+                await self.port.record("reset_failed" if stop_error else "reset_cancelled", reset.copy())
+            except Exception as error:
+                stop_error = await self._safe_stop()
+                reset.update(status="failed", ended=self.port.now(), error=f"{error}" + (f"; STOP: {stop_error}" if stop_error else ""))
+                self.runtime.fault = reset["error"]
+                await self.port.record("reset_failed", reset.copy())
+
+    async def _wait_available(self, seconds: float) -> None:
+        due = self.port.now() + seconds
+        while self.port.now() < due:
+            if not self.port.observe()[0]:
+                raise OperationError("Žalúzia sa stala nedostupnou")
+            await self.port.sleep(min(1, due - self.port.now()))
+        if not self.port.observe()[0]:
+            raise OperationError("Žalúzia sa stala nedostupnou")
+
+    async def cancel_reset(self) -> None:
+        if self.reset_task and not self.reset_task.done():
+            self.reset_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.reset_task
+            if self.resetting:
+                # Task cancellation before its first instruction still requires a visible terminal state.
+                error = await self._safe_stop()
+                self.runtime.reset.update(status="failed" if error else "cancelled", ended=self.port.now(), error=error)
+                await self.port.record("reset_failed" if error else "reset_cancelled", self.runtime.reset.copy())

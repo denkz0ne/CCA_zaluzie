@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+.ha-venv/
 .pytest_cache/
 .ruff_cache/
 .coverage
