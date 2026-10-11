@@ -562,7 +562,12 @@ def validate_config(raw: dict, *, cover_entity: str | None = None) -> dict:
         raise ConfigError("close_position", "otvorená a zatvorená poloha musia byť rôzne")
     for prefix in ("morning", "evening"):
         for suffix in ("", "_free"):
-            if cfg[f"{prefix}_early{suffix}"] > cfg[f"{prefix}_late{suffix}"]:
+
+            def seconds(value):
+                parts = [int(x) for x in value.split(":")]
+                return parts[0] * 3600 + parts[1] * 60 + (parts[2] if len(parts) > 2 else 0)
+
+            if seconds(cfg[f"{prefix}_early{suffix}"]) > seconds(cfg[f"{prefix}_late{suffix}"]):
                 raise ConfigError(f"{prefix}_early{suffix}", "najskorší čas je po najneskoršom")
     if cfg["shade_elevation_min"] > cfg["shade_elevation_max"]:
         raise ConfigError("shade_elevation_min", "dolná hranica je väčšia ako horná")

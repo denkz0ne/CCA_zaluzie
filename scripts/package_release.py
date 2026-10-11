@@ -13,6 +13,10 @@ if len(sys.argv) != 2 or sys.argv[1] != version:
 dest = root / "dist"
 dest.mkdir(exist_ok=True)
 with ZipFile(dest / "cca_zaluzie.zip", "w", compression=ZIP_DEFLATED) as archive:
+    for name in ("LICENSE", "ATTRIBUTION.md"):
+        info = ZipInfo(name, (2026, 10, 11, 0, 0, 0))
+        info.compress_type = ZIP_DEFLATED
+        archive.writestr(info, (root / name).read_bytes())
     for path in sorted(component.rglob("*")):
         if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
             info = ZipInfo(path.relative_to(component).as_posix(), (2026, 10, 11, 0, 0, 0))

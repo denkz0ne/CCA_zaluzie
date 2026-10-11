@@ -87,6 +87,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await controller.async_stop()
     if await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN]["controllers"].pop(entry.entry_id, None)
+        from .const import EVENT_UPDATED
+
+        hass.bus.async_fire(EVENT_UPDATED, {"entry_id": entry.entry_id})
         if not hass.data[DOMAIN]["controllers"]:
             from homeassistant.components import frontend
 

@@ -58,10 +58,14 @@ class Snapshot:
 
 @dataclass
 class Runtime:
+    generation: int = 0
     base_target: float | None = None
     base_action: str = "idle"
     base_owned: bool = False
     logical_days: dict[str, str] = field(default_factory=dict)
+    boundary_days: dict[str, str] = field(default_factory=dict)
+    completed_days: dict[str, str] = field(default_factory=dict)
+    allow_reconcile: bool = False
     schedule_latched: dict[str, bool] = field(default_factory=dict)
     days: dict[str, str] = field(default_factory=dict)
     stable: dict[str, float] = field(default_factory=dict)
@@ -73,6 +77,7 @@ class Runtime:
     pending: str | None = None
     pending_since: float | None = None
     pending_due: float | None = None
+    pending_blocked: bool = False
     attempts: dict[str, float] = field(default_factory=dict)
     expired: list[str] = field(default_factory=list)
     manual_since: float | None = None
@@ -81,10 +86,13 @@ class Runtime:
     hold_signature: list | None = None
     hold_explicit: bool = False
     last_force: str | None = None
+    force_changed_at: float | None = None
     last_resident: bool | None = None
+    last_pause: bool | None = None
     last_window: str = "closed"
     last_action: str = "idle"
     command: dict | None = None
+    pending_dispatch: dict | None = None
     reset: dict | None = None
     fault: str | None = None
 

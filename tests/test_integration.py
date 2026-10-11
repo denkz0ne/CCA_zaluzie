@@ -310,3 +310,80 @@ async def test_options_reload_cancels_reset_and_attempts_stop(hass, entry):
     await hass.async_block_till_done()
     assert calls[-1].service == "stop_cover"
     assert config_entry.runtime_data.runtime.reset["status"] == "cancelled"
+
+
+@pytest.mark.parametrize(
+    "group",
+    [
+        "cover",
+        "schedule",
+        "light",
+        "shading",
+        "windows",
+        "manual",
+        "resident",
+        "advanced",
+        "records",
+    ],
+)
+async def test_every_native_options_section_opens(hass, entry, group):
+    config_entry, _ = entry
+    menu = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": group}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == group
+
+
+async def test_panel_serves_the_production_module_and_stylesheet(hass, entry, hass_client):
+    client = await hass_client()
+    response = await client.get("/cca_zaluzie/frontend/cca-zaluzie-panel.js")
+    assert response.status == 200
+    assert "cca-zaluzie-panel" in await response.text()
+    response = await client.get("/cca_zaluzie/frontend/panel.css")
+    assert response.status == 200
+
+
+async def test_external_cover_service_interrupts_reset(hass, entry):
+    import asyncio
+
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    gate = asyncio.Event()
+
+    async def wait(_seconds):
+        await gate.wait()
+
+    controller.sleep = wait
+    await controller.async_control("reset")
+    await hass.services.async_call(
+        "cover",
+        "open_cover",
+        {"entity_id": "cover.blind"},
+        blocking=True,
+        context=Context(user_id="external-user"),
+    )
+    await hass.async_block_till_done()
+    assert controller.runtime.reset["status"] in ("interrupted", "failed")
+    assert not any(event["type"] == "reset_completed" for event in controller.history)
+    assert calls[-1].service == "stop_cover"
+
+
+async def test_panel_rejects_blank_numeric_config_without_changing_the_entry(
+    hass, entry, hass_ws_client
+):
+    config_entry, _ = entry
+    client = await hass_ws_client(hass)
+    config = {**config_entry.runtime_data.config, "open_position": None}
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "cca_zaluzie/configure",
+            "entry_id": config_entry.entry_id,
+            "config": config,
+        }
+    )
+    result = await client.receive_json()
+    assert result["success"] is False and result["error"]["code"] == "invalid_config"
+    assert config_entry.runtime_data.config["open_position"] == 100

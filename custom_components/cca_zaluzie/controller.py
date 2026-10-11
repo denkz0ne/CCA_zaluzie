@@ -53,12 +53,14 @@ class CoverController:
         self._timer = None
         self._dispatch_task: asyncio.Task | None = None
         self._eval_lock = asyncio.Lock()
+        self._persist_lock = asyncio.Lock()
         self._checks: dict = {}
         self._scripts: dict[str, Script] = {}
         self._active = False
         self._starting = True
         self._last_position = None
         self._last_available = True
+        self._last_usable = True
         self._last_decision = None
         self._forecast: dict = {}
         self._forecast_conditions: dict = {}
@@ -142,8 +144,12 @@ class CoverController:
             )
         self.runtime.estimated_position = target
 
-    def _spawn(self, coro) -> asyncio.Task:
-        task = self.hass.async_create_task(coro)
+    def _spawn(self, coro, *, background: bool = False) -> asyncio.Task:
+        task = (
+            self.hass.async_create_background_task(coro, f"CCA {self.entry.entry_id}")
+            if background
+            else self.hass.async_create_task(coro)
+        )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return task
@@ -152,8 +158,20 @@ class CoverController:
         saved = await self.store.async_load() or {}
         self.runtime = Runtime.from_dict(saved.get("runtime", {}))
         self.history = saved.get("history", [])
+        self.runtime.allow_reconcile = self.config["startup_recovery"]
+        if self.runtime.command and self.runtime.command.get("context_id"):
+            self.contexts.append(self.runtime.command["context_id"])
         self.operations.runtime = self.runtime
         await self.operations.restore()
+        if self.runtime.pending_dispatch:
+            self.runtime.pending_dispatch = None
+            await self.record("drive_interrupted", {"reason": "Reštart alebo obnovenie integrácie"})
+        if self.runtime.pending:
+            self.runtime.pending = self.runtime.pending_since = self.runtime.pending_due = None
+            self.runtime.stable.clear()
+            await self.record(
+                "pending_interrupted", {"reason": "Po štarte sa stabilita podmienok overí znova"}
+            )
         for key, spec in FIELDS.items():
             if spec.kind == "condition" and self.config[key]:
                 validated = await condition.async_validate_conditions_config(
@@ -171,6 +189,9 @@ class CoverController:
                 )
         self._active = True
         self._last_available, self._last_position = self.observe()
+        self._last_usable = self._last_available and (
+            self._last_position is not None or self.config["position_source"] == "drive_time"
+        )
         watched = {
             self.config[k] for k, spec in FIELDS.items() if spec.kind == "entity" and self.config[k]
         }
@@ -211,6 +232,16 @@ class CoverController:
                 context.user_id is not None
                 or (moved and not active_command and not self.operations.resetting)
             )
+            if (
+                self.config["position_source"] == "drive_time"
+                and state.state in ("opening", "closing")
+                and not own
+                and not active_command
+                and not self.operations.resetting
+            ):
+                external = True
+            if external:
+                self.runtime.estimated_position = None
             if external and self.config["manual_enabled"]:
                 mark_manual(
                     self.config, self.runtime, position, dt_util.now(), self._snapshot_inputs()
@@ -226,8 +257,17 @@ class CoverController:
             ):
                 command.update(status="completed", ended=self.now(), observed=position)
                 await self.record("command_completed", command.copy())
-            if available and not self._last_available and not self.config["recovery_enabled"]:
-                hold_current(self.runtime, self.decision.target, self.decision.mode)
+            usable = available and (
+                position is not None or self.config["position_source"] == "drive_time"
+            )
+            if usable and not self._last_usable:
+                if self.config["recovery_enabled"]:
+                    self.runtime.allow_reconcile = True
+                else:
+                    hold_current(
+                        self.runtime, self.decision.target, self.decision.mode, explicit=True
+                    )
+            self._last_usable = usable
             self._last_available, self._last_position = available, position
         await self.async_evaluate()
 
@@ -323,7 +363,7 @@ class CoverController:
             )
             decision = self.decision
             if self._starting and not self.config["startup_recovery"]:
-                hold_current(self.runtime, decision.target, decision.mode)
+                hold_current(self.runtime, decision.target, decision.mode, explicit=True)
                 decision.inhibit = "startup_hold"
             available, position = self.observe()
             if available and position is None and self.config["position_source"] != "drive_time":
@@ -341,10 +381,16 @@ class CoverController:
                 await self.record("decision", decision.to_dict())
             if was_manual and self.runtime.manual_since is None:
                 await self.record("manual_reset", {})
-                await self._run_script("manual_reset_after")
+                self._spawn(self._run_hook("manual_reset_after"), background=True)
             if self._dispatch_task and not self._dispatch_task.done():
-                if decision.inhibit or (old.target, old.mode) != (decision.target, decision.mode):
+                if decision.inhibit or (old.target, old.mode, old.action) != (
+                    decision.target,
+                    decision.mode,
+                    decision.action,
+                ):
                     self._dispatch_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await self._dispatch_task
             if (
                 decision.target is not None
                 and not decision.inhibit
@@ -357,10 +403,18 @@ class CoverController:
                         or command.get("target") != decision.target
                     ):
                         self._dispatch_task = self._spawn(
-                            self._dispatch(decision.target, decision.mode, decision.action)
+                            self._dispatch(decision.target, decision.mode, decision.action),
+                            background=True,
                         )
             self._arm_timer()
             self._notify()
+
+    async def _run_hook(self, key: str) -> None:
+        try:
+            await self._run_script(key)
+        except Exception as error:
+            self.runtime.fault = str(error)
+            await self.record("action_failed", {"action": key, "error": str(error)})
 
     async def _run_script(self, key: str) -> None:
         script = self._scripts.get(key)
@@ -384,10 +438,21 @@ class CoverController:
             delay = 0
         try:
             if delay:
+                self.runtime.pending_dispatch = {
+                    "target": target,
+                    "mode": mode,
+                    "action": action,
+                    "due": self.now() + delay,
+                }
                 await self.record("drive_pending", {"target": target, "due": self.now() + delay})
                 await self.sleep(delay)
+            self.runtime.pending_dispatch = None
             current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
-            if current.inhibit or (current.target, current.mode) != (target, mode):
+            if current.inhibit or (current.target, current.mode, current.action) != (
+                target,
+                mode,
+                action,
+            ):
                 await self.record(
                     "drive_cancelled",
                     {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"},
@@ -396,13 +461,19 @@ class CoverController:
             _, observed = self.observe()
             previous = self.runtime.command or {}
             already_handled = (
-                previous.get("status") in ("custom_sent", "completed", "estimated")
+                previous.get("status") == "custom_sent"
                 and previous.get("target") == target
                 and previous.get("action") == action
+                and previous.get("generation") == self.runtime.generation
             )
             if (
                 observed is not None and abs(observed - target) <= self.config["position_tolerance"]
             ) or already_handled:
+                self.runtime.allow_reconcile = False
+                if action in ("open", "close"):
+                    self.runtime.completed_days[action] = self.runtime.logical_days.get(
+                        action, dt_util.now().date().isoformat()
+                    )
                 if self.runtime.transition_action == action:
                     self.runtime.transition_action = None
                     await self.record("target_adopted", {"target": target, "action": action})
@@ -410,7 +481,11 @@ class CoverController:
             await self._run_script(f"{action}_before")
             # Before-actions may change pause, contacts or availability. Recheck immediately.
             current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
-            if current.inhibit or current.target != target:
+            if current.inhibit or (current.target, current.mode, current.action) != (
+                target,
+                mode,
+                action,
+            ):
                 await self.record(
                     "drive_cancelled",
                     {"target": target, "reason": current.inhibit or "Cieľ sa zmenil"},
@@ -427,6 +502,7 @@ class CoverController:
                     "status": "custom_sent",
                     "started": self.now(),
                     "deadline": self.now() + self.config["movement_timeout"],
+                    "generation": self.runtime.generation,
                 }
                 await self.record("custom_action_completed", {"target": target, "action": action})
                 moved = True
@@ -438,6 +514,12 @@ class CoverController:
                     await self._run_script(f"{action}_after")
             if self.runtime.transition_action == action:
                 self.runtime.transition_action = None
+            self.runtime.allow_reconcile = False
+            if moved and action in ("open", "close"):
+                self.runtime.completed_days[action] = self.runtime.logical_days.get(
+                    action, dt_util.now().date().isoformat()
+                )
+            await self._persist()
             if (
                 moved
                 and self.runtime.manual_since is not None
@@ -446,6 +528,7 @@ class CoverController:
                 self.runtime.manual_since = None
             self._arm_timer()
         except asyncio.CancelledError:
+            self.runtime.pending_dispatch = None
             await self.record(
                 "drive_cancelled",
                 {"target": target, "reason": "Rozhodnutie sa zmenilo alebo integrácia sa vypla"},
@@ -455,6 +538,19 @@ class CoverController:
             self.runtime.fault = str(error)
             hold_current(self.runtime, target, mode)
             await self.record("action_failed", {"target": target, "error": str(error)})
+
+    async def _persist(self) -> None:
+        async with self._persist_lock:
+            task = asyncio.create_task(
+                self.store.async_save(
+                    {"runtime": self.runtime.to_dict(), "history": deepcopy(self.history)}
+                )
+            )
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                await task
+                raise
 
     @callback
     def _arm_timer(self) -> None:
@@ -496,7 +592,7 @@ class CoverController:
         ][-int(self.config["history_limit"]) :]
         log = _LOGGER.warning if "failed" in event or "interrupted" in event else _LOGGER.debug
         log("%s: %s %s", self.entry.title, event, details)
-        await self.store.async_save({"runtime": self.runtime.to_dict(), "history": self.history})
+        await self._persist()
         if self.config["logbook"] and event != "decision":
             self.hass.bus.async_fire(
                 "logbook_entry",
@@ -530,6 +626,14 @@ class CoverController:
 
     def snapshot(self) -> dict[str, Any]:
         available, position = self.observe()
+        decision = self.decision.to_dict()
+        if self.runtime.pending_dispatch:
+            decision["next_at"] = min(
+                x
+                for x in (decision["next_at"], self.runtime.pending_dispatch["due"])
+                if x is not None
+            )
+            decision["pending"] = "drive"
         return {
             "entry_id": self.entry.entry_id,
             "name": self.config["name"],
@@ -537,7 +641,7 @@ class CoverController:
             "available": available,
             "position": position,
             "config": deepcopy(self.config),
-            "decision": self.decision.to_dict(),
+            "decision": decision,
             "runtime": self.runtime.to_dict(),
             "events": deepcopy(self.history),
             "sensors": {
@@ -561,10 +665,15 @@ class CoverController:
             _CONTROL_CONTEXT.reset(token)
 
     async def _async_control(self, action: str, position: float | None = None) -> None:
+        caller = _CONTROL_CONTEXT.get()
+        internal = caller is not None and (
+            caller.id in self.contexts or caller.parent_id in self.contexts
+        )
         if (
             action in ("reset", "stop", "open", "close", "shade", "ventilate", "position")
             and self._dispatch_task
             and not self._dispatch_task.done()
+            and not internal
         ):
             self._dispatch_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -592,14 +701,31 @@ class CoverController:
             target = targets[action]
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
-            await self.operations.command(target, force=True)
-            mark_manual(self.config, self.runtime, target, dt_util.now())
-            hold_current(self.runtime, self.decision.target, self.decision.mode, explicit=True)
+            if self.config["position_source"] == "drive_time":
+                if not self.observe()[0]:
+                    raise OperationError("Žalúzia nie je dostupná")
+                if target not in (0, 100) and self.runtime.estimated_position is None:
+                    raise OperationError("Pred čiastočnou polohou vykonaj reset polohy")
+                mark_manual(
+                    self.config, self.runtime, target, dt_util.now(), self._snapshot_inputs()
+                )
+                hold_current(self.runtime, self.decision.target, self.decision.mode)
+                self._spawn(self._manual_motion(target), background=True)
+                await asyncio.sleep(0)
+            else:
+                await self.operations.command(target, force=True)
+                mark_manual(
+                    self.config, self.runtime, target, dt_util.now(), self._snapshot_inputs()
+                )
+                hold_current(self.runtime, self.decision.target, self.decision.mode)
             await self.record("manual_requested", {"target": target})
         elif action in ("clear_override", "reconcile"):
             self.runtime.manual_since = None
             self.runtime.hold_signature = None
             self.runtime.hold_explicit = False
+            self.runtime.allow_reconcile = action == "reconcile" or self.config["manual_return"]
+            if not self.runtime.allow_reconcile:
+                hold_current(self.runtime, self.decision.target, self.decision.mode)
             if action == "reconcile":
                 self.runtime.command = None
                 self.runtime.fault = None
@@ -612,6 +738,13 @@ class CoverController:
         else:
             raise OperationError("Neznámy povel")
         await self.async_evaluate()
+
+    async def _manual_motion(self, target) -> None:
+        try:
+            await self.operations.command(target, force=True)
+        except OperationError as error:
+            self.runtime.fault = str(error)
+            await self.record("action_failed", {"target": target, "error": str(error)})
 
     async def async_stop(self) -> None:
         self._active = False
@@ -630,5 +763,5 @@ class CoverController:
         for checker in self._checks.values():
             if hasattr(checker, "async_unload"):
                 checker.async_unload()
-        await self.store.async_save({"runtime": self.runtime.to_dict(), "history": self.history})
+        await self._persist()
         self._listeners.clear()

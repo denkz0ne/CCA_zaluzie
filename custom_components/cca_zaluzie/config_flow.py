@@ -146,8 +146,14 @@ class CCAOptionsFlow(config_entries.OptionsFlow):
         errors, details = {}, ""
         if user_input is not None:
             try:
+                patch = {
+                    k: user_input.get(k, "")
+                    if FIELDS[k].kind == "entity"
+                    else user_input.get(k, config[k])
+                    for k in keys
+                }
                 candidate = validate_config(
-                    {**config, **{k: v for k, v in user_input.items() if k in keys}},
+                    {**config, **patch},
                     cover_entity=self.config_entry.data["cover_entity"],
                 )
                 await async_validate_native(self.hass, candidate)

@@ -6,6 +6,7 @@ from .const import VERSION
 
 async def async_get_config_entry_diagnostics(hass, entry):
     snapshot = entry.runtime_data.snapshot()
+    snapshot["sensors"] = snapshot["decision"]["conditions"].get("inputs", {})
     for key, spec in FIELDS.items():
         if spec.kind in ("action", "condition"):
             snapshot["config"][key] = "<redacted custom automation>"
@@ -14,7 +15,8 @@ async def async_get_config_entry_diagnostics(hass, entry):
         if isinstance(value, dict):
             return {
                 k: "<redacted>"
-                if any(
+                if k in ("fault", "error")
+                or any(
                     word in k.lower()
                     for word in ("password", "token", "secret", "authorization", "api_key")
                 )

@@ -91,7 +91,6 @@ class MotorOperations:
                 "deadline": self.port.now() + self.config["movement_timeout"],
             }
             self.runtime.command = command
-            await self.port.record("command_requested", command.copy())
             service = (
                 "close_cover"
                 if target == 0
@@ -102,6 +101,7 @@ class MotorOperations:
             data = {"position": target} if service == "set_cover_position" else {}
             try:
                 self.motion_task = asyncio.current_task()
+                await self.port.record("command_requested", command.copy())
                 if self.config["position_source"] == "drive_time":
                     previous_position = self.runtime.estimated_position
                     service = (
