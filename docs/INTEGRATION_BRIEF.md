@@ -33,7 +33,7 @@ Use EC's compact controller overview as the interaction model:
 - Avoid turning the overview into a wall of 100 settings. Separate everyday controls from advanced conditions.
 
 ### Config flow (proposed progressive sections)
-1. Create named controller/cover entry; select one or more `cover` entities. The data model and UI must support multiple covers under the integration from the start, with optional grouping.
+1. Create one named automation/controller entry for exactly one `cover` entity. The integration supports multiple covers by creating multiple independent entries, each with its own side-panel row and runtime state. Shared defaults may be offered as setup templates, but not as a combined multi-cover automation.
 2. Basic schedule: morning open, evening close, weekdays/weekends, optional workday/calendar support.
 3. Cover calibration: select ordinary vertical cover, confirm direction/position source, configure open/close/shading/ventilation targets, position feedback and tolerance. Do not offer tilt/lamella settings.
 4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls. Keep all applicable CCA behavior available; omit only tilt/lamella controls.
