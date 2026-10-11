@@ -33,7 +33,7 @@ Use EC's compact controller overview as the interaction model:
 - Avoid turning the overview into a wall of 100 settings. Separate everyday controls from advanced conditions.
 
 ### Config flow (proposed progressive sections)
-1. Create named controller/cover entry; select one or more `cover` entities (MVP may start with one cover per controller but data model should support multiple).
+1. Create named controller/cover entry; select one or more `cover` entities. The data model and UI must support multiple covers under the integration from the start, with optional grouping.
 2. Basic schedule: morning open, evening close, weekdays/weekends, optional workday/calendar support.
 3. Cover calibration: select ordinary vertical cover, confirm direction/position source, configure open/close/shading/ventilation targets, position feedback and tolerance. Do not offer tilt/lamella settings.
 4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls. Keep all applicable CCA behavior available; only omit tilt/lamella controls and unsupported inverted cover types.
@@ -91,17 +91,9 @@ The integration should own its config and state; do not require per-cover `input
 - Integration reload/removal and config entry migration without orphaned entities.
 - Repeated sensor jitter, duplicate events and action failure.
 
-## MVP recommendation (to be reviewed before implementation)
+## Delivery approach
 
-1. Config flow, controller data model, entity selection and basic per-cover settings.
-2. Morning/evening schedules with weekday/weekend times and explicit early/late behavior.
-3. Per-cover automation enable, pause, simple manual override detection/reset.
-4. Shading by sun geometry plus optional brightness; pending wait/recheck; shading end/hysteresis.
-5. Overview card/list and 24-hour event timeline with explainable states and manual controls.
-6. Persistent config, HA restart reconciliation, diagnostics/logbook.
-7. Add ventilation contacts, temperature/weather forecasts, calendar, resident mode, force controls, dynamic shading tilt, custom actions and recovery refinements in later stages.
-
-This MVP is a recommendation, not an approved feature cut. Do not silently drop CCA behaviors from the long-term target; track deferred features in issues or `docs/FEATURE_MATRIX.md`.
+Deliver in vertical slices, but the target remains behavioral parity with all applicable CCA logic. Keep a feature matrix that marks each branch as implemented, in progress, deferred or explicitly excluded. The only confirmed functional exclusions are every lamella/tilt behavior and inverted awning/sunshade types; shading via partial vertical position is included. A first usable slice can provide the config flow, multi-cover model, basic schedule, manual override/pause, and timeline/debug foundation; subsequent slices add CCA condition groups, shading, ventilation, resident/calendar, force/recovery/actions, and full diagnostics. This is sequencing only, not a feature cut. Do not label the first slice “CCA parity.”
 
 ## Agent instructions
 
