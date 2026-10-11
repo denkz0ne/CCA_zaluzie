@@ -1,0 +1,19 @@
+# Instructions for coding agents
+
+This repository is a new Home Assistant custom integration project. Before implementation, read:
+- [docs/INTEGRATION_BRIEF.md](docs/INTEGRATION_BRIEF.md)
+- [docs/CCA_REFERENCE.md](docs/CCA_REFERENCE.md)
+
+## Source-of-truth rules
+- User-confirmed requirements are listed separately from proposals in the implementation brief.
+- CCA feature notes are a snapshot of upstream `hvorragend/ha-blueprints` version 2026.10.04 at commit `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`; verify upstream before implementing behavior because it changes.
+- Entity Controller / “Svetlo v tme” is a UI and interaction reference. Do not copy its code or assume its internals without inspecting the relevant source.
+- Treat material in the parent ChatGPT project's `sources/` directory as read-only reference. Never edit, move, rename or delete synced source files.
+- Do not copy CCA source code into this repository until its current upstream license and attribution requirements have been checked.
+
+## Engineering rules
+- Keep the integration config-flow based; do not require YAML or manually created input_text state helpers for ordinary setup.
+- Separate desired target, observed cover position, runtime mode, and reason for a decision.
+- Make automation decisions idempotent, explainable and safe with unavailable/unknown states.
+- Preserve configuration and entity identity across options updates and schema migrations.
+- Keep this repository focused on the integration; record feature decisions and deferred work in docs/issues.
