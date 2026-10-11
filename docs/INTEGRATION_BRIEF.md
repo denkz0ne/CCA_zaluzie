@@ -12,7 +12,7 @@ Create a Home Assistant custom integration that manages multiple blinds/shutters
 - The new integration manages configured covers according to user-defined schedules and behavior.
 - The interface should follow the same general principle as EC: covers grouped into controllers/rooms, a timeline of events, and visible current state, blocks, manual states and controls.
 - Preserve the original CCA logic and its layered conditions/controls, expanding blueprint architecture limits where useful.
-- Only ordinary vertical blinds/shutters that move up and down are supported. Lamella/tilt movement is excluded; shading by moving the entire blind to a partial-height position remains required.
+- The user's current hardware is ordinary blinds that move up/down. The sole confirmed functional difference from CCA is that lamella/tilt movement is excluded; shading by moving the whole blind to a partial-height position remains required. Preserve all other CCA cover-type semantics as applicable.
 - Feature concepts explicitly named: shading, morning/evening control, blocking, manual states, strong debug/states/logs/timelines, and settings per configuration.
 - Simplify configuration through progressive disclosure and conditional fields without deleting applicable CCA behavior.
 - The integration should have a similar config flow to EC.
@@ -36,7 +36,7 @@ Use EC's compact controller overview as the interaction model:
 1. Create named controller/cover entry; select one or more `cover` entities. The data model and UI must support multiple covers under the integration from the start, with optional grouping.
 2. Basic schedule: morning open, evening close, weekdays/weekends, optional workday/calendar support.
 3. Cover calibration: select ordinary vertical cover, confirm direction/position source, configure open/close/shading/ventilation targets, position feedback and tolerance. Do not offer tilt/lamella settings.
-4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls. Keep all applicable CCA behavior available; only omit tilt/lamella controls and unsupported inverted cover types.
+4. Select optional behaviors: sun shading, sensor-based open/close, ventilation/window contacts, resident/sleep mode, manual override policy, force/pause controls. Keep all applicable CCA behavior available; omit only tilt/lamella controls.
 5. Configure only the fields relevant to selected behaviors; advanced conditions can be tucked away.
 6. Preview/validate schedule and conflicts; finish with a controller dashboard.
 7. Options flow edits settings later without destroying runtime history. Reconfigure should preserve config entry and entities where possible.
@@ -93,7 +93,7 @@ The integration should own its config and state; do not require per-cover `input
 
 ## Delivery approach
 
-Deliver in vertical slices, but the target remains behavioral parity with all applicable CCA logic. Keep a feature matrix that marks each branch as implemented, in progress, deferred or explicitly excluded. The only confirmed functional exclusion is every lamella/tilt behavior; shading via partial vertical position is included. A first usable slice can provide the config flow, multi-cover model, basic schedule, manual override/pause, and timeline/debug foundation; subsequent slices add CCA condition groups, shading, ventilation, resident/calendar, force/recovery/actions, and full diagnostics. This is sequencing only, not a feature cut. Do not label the first slice “CCA parity.”
+Deliver in vertical slices, but the target remains behavioral parity with all applicable CCA logic. Keep a feature matrix that marks each branch as implemented, in progress, deferred or explicitly excluded. The only confirmed functional exclusion is lamella/tilt behavior; shading via partial vertical position is included. A first usable slice can provide the config flow, multi-cover model, basic schedule, manual override/pause, and timeline/debug foundation; subsequent slices add CCA condition groups, shading, ventilation, resident/calendar, force/recovery/actions, and full diagnostics. This is sequencing only, not a feature cut. Do not label the first slice “CCA parity.”
 
 ## Agent instructions
 
@@ -107,7 +107,7 @@ Keep feature decisions traceable to one of: user-confirmed requirement, CCA obse
 
 ## Scope clarification: CCA limits and simplified setup
 
-- Preserve every applicable CCA behavior and its layered condition logic. Do not cut the project down to the initial “basic” feature slice.
+- Preserve every CCA behavior and its layered condition logic except lamella/tilt control. Do not cut the project down to the initial “basic” feature slice.
 - Expand implementation limits caused by the blueprint model: multiple covers managed under the integration, integration-owned state (no 254-character helper per cover), central/shared configuration with per-cover overrides, richer persisted history and integration-native UI/diagnostics.
 - Retain behavioral safeguards that are useful: early/late schedule boundaries, trigger dwell/wait times, hysteresis, retry ceilings, position tolerance, lockout, and explicit recovery policy.
 - Simplify the user task, not the behavior: presets, sensible defaults, conditional fields, grouped advanced sections, validation and a preview. Users should not need to understand 100 YAML selector IDs to configure one blind.
