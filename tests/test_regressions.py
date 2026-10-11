@@ -90,6 +90,17 @@ def test_evening_close_to_vent_floor_keeps_manual_closing_policy():
     assert decision.inhibit == "manual"
 
 
+def test_evening_close_to_vent_floor_keeps_native_closing_condition():
+    cfg = config(ventilation_enabled=True, window_tilted="binary_sensor.tilt", contact_delay=0)
+    rt = Runtime()
+    snap = world(**{"binary_sensor.tilt": Reading("on")})
+    evaluate(cfg, rt, snap, NOW.replace(hour=12))
+    snap.gates = {"close": False, "ventilate": True}
+    decision = evaluate(cfg, rt, snap, NOW.replace(hour=22))
+    assert decision.action == "ventilate"
+    assert decision.inhibit == "condition"
+
+
 async def test_stop_can_cancel_a_command_while_its_initial_record_is_saving():
     port = Port()
     op = motor(port)
