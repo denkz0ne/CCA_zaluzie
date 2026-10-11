@@ -4,6 +4,38 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/tests/browser/demo.html");
 });
 
+test("history period is selectable", async ({ page }) => {
+  await page.getByLabel("Obdobie histórie").selectOption("6");
+  await expect(
+    page.getByRole("heading", { name: "Priebeh za posledných 6 hodín" }),
+  ).toBeVisible();
+});
+
+test("save locks edits until the response arrives", async ({ page }) => {
+  await page.evaluate(() => {
+    window.saveGate = new Promise((resolve) => (window.finishSave = resolve));
+  });
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  await page.getByLabel("Názov", { exact: true }).fill("Uložiť celý návrh");
+  await page.getByRole("button", { name: "Uložiť zmeny", exact: true }).click();
+  await expect(page.getByLabel("Názov", { exact: true })).toBeDisabled();
+  await page.evaluate(() => window.finishSave());
+  await expect(page.getByLabel("Názov", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Názov", { exact: true })).toHaveValue(
+    "Uložiť celý návrh",
+  );
+});
+
+test("removing the selected controller selects a remaining cover", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  await page.evaluate(() => window.publish({ entry_id: "one" }));
+  await expect(page.getByLabel("Názov", { exact: true })).toHaveValue(
+    "Spálňa · okno",
+  );
+});
+
 test("shows cover state and the persistent automation list", async ({
   page,
 }) => {
@@ -91,7 +123,10 @@ test("motor errors are visible without a success toast", async ({ page }) => {
 });
 
 test("timeline event opens actual decision details", async ({ page }) => {
-  await page.getByRole("button", { name: /Pohyb potvrdený/ }).first().click();
+  await page
+    .getByRole("button", { name: /Pohyb potvrdený/ })
+    .first()
+    .click();
   await expect(page.getByRole("dialog")).toContainText("58");
 });
 

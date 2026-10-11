@@ -56,12 +56,16 @@ class MotorOperations:
     async def command(self, target: float, *, force: bool = False) -> bool:
         if self.resetting:
             raise OperationError("Prebieha reset polohy")
+        if self.lock.locked():
+            raise OperationError("Prebieha pohyb; pred ďalším povelom použi STOP")
         async with self.lock:
             if self.resetting:
                 raise OperationError("Prebieha reset polohy")
             available, position = self.port.observe()
             if not available:
                 raise OperationError("Žalúzia nie je dostupná")
+            if position is None and self.config["position_source"] != "drive_time" and not force:
+                raise OperationError("Spätná väzba polohy nie je dostupná")
             if (
                 position is not None
                 and abs(position - target) <= self.config["position_tolerance"]

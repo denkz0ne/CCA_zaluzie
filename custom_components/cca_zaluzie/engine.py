@@ -374,6 +374,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         if cfg[f"{action}_once"] and rt.days.get(action) == today:
             fresh = False
         if fresh or guaranteed:
+            rt.manual_policy_action = action
             rt.generation += 1
             if guaranteed:
                 rt.boundary_days[action] = today
@@ -523,6 +524,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     if was_shading and not rt.shading:
         rt.transition_action = "shade_end"
     if was_shading != rt.shading:
+        rt.manual_policy_action = "shade_start" if rt.shading else "shade_end"
         rt.generation += 1
     target, mode, action = (
         rt.base_target if rt.base_owned or rt.transition_action else None,
@@ -630,11 +632,17 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             rt.keep_full_tilt = False
             rt.transition_action = action = "ventilate_end"
         if rt.last_window != window:
+            if not any(f"schedule.{key}.trigger" in trace for key in ("open", "close")):
+                rt.manual_policy_action = "ventilate_end" if window == "closed" else "ventilate"
             rt.generation += 1
         rt.last_window = window
     trace["window.state"] = window
 
     force = None
+    force_unknown = any(
+        cfg[f"force_{suffix}"] and snap.get(cfg[f"force_{suffix}"]).boolean() is None
+        for suffix in ("open", "close", "ventilate", "shade")
+    )
     # Upstream uses last-activated-wins, including when one of several forces clears.
     candidates = []
     for suffix, target_key, force_action in (
@@ -662,12 +670,13 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         rt.generation += 1
     rt.force_changed_at = activated_at
     signature = [target, mode, rt.generation]
-    if rt.last_force and not force and not cfg["force_recovery"]:
+    if rt.last_force and not force and not force_unknown and not cfg["force_recovery"]:
         rt.hold_signature = signature
         rt.allow_reconcile = False
-    elif rt.last_force and not force:
+    elif rt.last_force and not force and not force_unknown:
         rt.allow_reconcile = True
-    rt.last_force = force
+    if not force_unknown:
+        rt.last_force = force
     if resident_leaving and mode == "schedule" and action == "open" and not cfg["resident_open"]:
         hold_current(rt, target, mode)
     if resident_leaving and mode == "schedule" and action == "close":
@@ -707,7 +716,8 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     inhibit = None
     if rt.pending_blocked and rt.pending_due > ts and not force:
         inhibit = "pending_confirmation"
-    if not force and mode in ("idle", "schedule") and not rt.base_owned:
+    transition_open = action in ("shade_end", "ventilate_end") and target == cfg["open_position"]
+    if not force and mode in ("idle", "schedule") and not rt.base_owned and not transition_open:
         inhibit = "unowned_target"
     if resident_blocks_open and mode == "schedule" and not force:
         inhibit = "resident_open"
@@ -775,7 +785,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         inhibit = "explicit_hold" if rt.hold_explicit else "manual_reset_hold"
     if (
         rt.manual_since is not None
-        and action in cfg["manual_blocks"]
+        and (rt.manual_policy_action or action) in cfg["manual_blocks"]
         and not force
         and mode != "window_lockout"
     ):
@@ -808,7 +818,22 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         inhibit = "window_tilted"
     if cfg["resident_sensor"] and resident is None and not force:
         inhibit = "resident_unknown"
-    for gate in ("global", action):
+    gates = ["global", action]
+    if action in ("shade_end", "ventilate_end"):
+        destination = (
+            "shade_start"
+            if mode == "shading"
+            else "close"
+            if target == cfg["close_position"]
+            else "open"
+            if target == cfg["open_position"]
+            else "ventilate"
+            if mode in ("ventilation", "window_lockout")
+            else rt.base_action
+        )
+        if destination:
+            gates.append(destination)
+    for gate in dict.fromkeys(gates):
         value = _gate(snap, gate, target, reason)
         trace[f"condition.{gate}"] = value
         if value is not True:
@@ -821,6 +846,8 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     rt.last_pause = paused
     if paused:
         inhibit = "paused"
+    if force_unknown:
+        inhibit = "force_unknown"
     if cfg["instance_entity"] and snap.get(cfg["instance_entity"]).state != cfg["instance_value"]:
         inhibit = "instance_disabled"
     if not cfg["enabled"]:

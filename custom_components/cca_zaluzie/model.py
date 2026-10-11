@@ -91,6 +91,7 @@ class Runtime:
     last_pause: bool | None = None
     last_window: str = "closed"
     last_action: str = "idle"
+    manual_policy_action: str | None = None
     command: dict | None = None
     pending_dispatch: dict | None = None
     reset: dict | None = None

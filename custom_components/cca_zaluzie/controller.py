@@ -743,6 +743,8 @@ class CoverController:
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
             if self.config["position_source"] == "drive_time":
+                if self.operations.lock.locked() or self.operations.resetting:
+                    raise OperationError("Prebieha pohyb; pred ďalším povelom použi STOP")
                 if not self.observe()[0]:
                     raise OperationError("Žalúzia nie je dostupná")
                 if target not in (0, 100) and self.runtime.estimated_position is None:

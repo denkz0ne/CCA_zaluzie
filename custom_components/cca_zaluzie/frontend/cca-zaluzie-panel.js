@@ -68,6 +68,18 @@ const inhibits = {
   startup_hold: "Po štarte čaká na ďalšiu udalosť",
   position_unknown: "Poloha nie je dostupná",
   movement_failed: "Pohyb sa nepotvrdil",
+  schedule_window: "Čaká na časové okno",
+  recovery_hold: "Po návrate čaká na ďalšiu udalosť",
+  stop_hold: "Pohyb zastavený",
+  wake_hold: "Čaká na ďalšie ranné podmienky",
+  force_unknown: "Neznámy vstup vynúteného povelu",
+  explicit_hold: "Pohyb zastavený",
+  pending_confirmation: "Čaká na potvrdenie podmienok",
+  unowned_target: "Cieľ nemá povolenú automatickú akciu",
+  resident_open: "Režim obyvateľa blokuje otvorenie",
+  contact_pending: "Čaká na potvrdenie kontaktu",
+  behavior_guard: "Pohyb blokuje zvolená ochrana",
+  once_per_day: "Denná akcia už bola vykonaná",
 };
 const eventNames = {
   decision: "Vyhodnotenie podmienok",
@@ -118,6 +130,7 @@ export class CCAZaluziePanel extends HTMLElement {
     this._error = "";
     this._notice = "";
     this._busy = false;
+    this._historyHours = 24;
     this.shadowRoot.addEventListener("click", (e) => this._click(e));
     this.shadowRoot.addEventListener("input", (e) => this._input(e));
     this.shadowRoot.addEventListener("change", (e) => this._input(e));
@@ -149,14 +162,23 @@ export class CCAZaluziePanel extends HTMLElement {
       const data = await this._hass.callWS({ type: "cca_zaluzie/list" });
       this._fields = data.fields;
       this._groups = data.groups;
+      this._controllers.clear();
       for (const c of data.controllers) this._update(c);
-      if (!this._selected) this._selected = data.controllers[0]?.entry_id;
+      if (!this._controllers.has(this._selected))
+        this._selected = data.controllers[0]?.entry_id;
       this._render();
       const unsub = await this._connection.subscribeMessage(
         (event) => {
           const p = event.event || event;
           if (p.controller) this._update(p.controller);
-          else this._controllers.delete(p.entry_id);
+          else {
+            this._controllers.delete(p.entry_id);
+            if (this._selected === p.entry_id) {
+              this._selected = this._controllers.keys().next().value;
+              this._render();
+              return;
+            }
+          }
           if (this._view === "settings") this._renderList();
           else this._render();
         },
@@ -220,7 +242,8 @@ export class CCAZaluziePanel extends HTMLElement {
       completed: "Reset bol dokončený",
     };
     const now = Date.now() / 1000 + (this._offset || 0),
-      start = now - 86400,
+      span = this._historyHours * 3600,
+      start = now - span,
       history = c.events
         .filter((e) => Date.parse(e.at) / 1000 >= start)
         .slice(-150);
@@ -229,7 +252,7 @@ export class CCAZaluziePanel extends HTMLElement {
         .filter(filter)
         .map(
           (e) =>
-            `<button class="track-dot ${e.type.includes("failed") ? "bad" : e.type.includes("manual") ? "manual" : e.details?.inhibit ? "warn" : ""}" style="left:${Math.max(1, Math.min(99, (Date.parse(e.at) / 1000 - start) / 864))}%" data-event="${esc(e.id)}" title="${esc(eventNames[e.type] || e.type)} · ${clock(e.at)}" aria-label="${esc(eventNames[e.type] || e.type)} ${clock(e.at)}"></button>`,
+            `<button class="track-dot ${e.type.includes("failed") ? "bad" : e.type.includes("manual") ? "manual" : e.details?.inhibit ? "warn" : ""}" style="left:${Math.max(1, Math.min(99, (Date.parse(e.at) / 1000 - start) / (span / 100)))}%" data-event="${esc(e.id)}" title="${esc(eventNames[e.type] || e.type)} · ${clock(e.at)}" aria-label="${esc(eventNames[e.type] || e.type)} ${clock(e.at)}"></button>`,
         )
         .join("")}</div></div>`;
     return `<div class="panel detail"><div class="detail-top"><span class="big-cover">▥</span><div class="detail-title"><h2>${esc(c.name)}</h2><p>${esc(c.cover_entity)}</p></div><div class="detail-actions"><button data-action="open" ${disabled}><span aria-hidden="true">↑</span> Otvoriť</button><button data-action="close" ${disabled}><span aria-hidden="true">↓</span> Zatvoriť</button><button data-action="stop" ${!c.available ? "disabled" : ""}>■ Stop</button><button data-view="settings" aria-label="Nastavenia žalúzie">⚙</button></div></div><div class="status-strip"><span class="pill ${d.inhibit ? "amber" : "green"}">${esc(inhibits[d.inhibit] || modes[d.mode] || d.mode)}</span><span>Cieľ ${d.target == null ? "neurčený" : `${esc(d.target)} %`}</span>${d.pending ? `<span class="pill amber">${d.pending === "shade_start" ? "Čaká na potvrdenie tienenia" : "Čaká na koniec tienenia"}</span>` : ""}<button class="quiet-btn" data-action="${c.config.enabled ? "disable" : "enable"}" ${this._busy ? "disabled" : ""}>${c.config.enabled ? "Pozastaviť automatiku" : "Zapnúť automatiku"}</button></div><div class="metrics"><div><div class="metric-label">Aktuálna poloha</div><div class="metric-value">${c.position == null ? "Neznáma" : `${esc(c.position)} %`}</div><div class="position-meter"><span style="width:${percent}%"></span></div>${rt.estimated_position != null && c.position == null ? `<small class="muted">Odhad: ${esc(rt.estimated_position)} %</small>` : ""}</div><div><div class="metric-label">Najbližšia udalosť</div><div class="metric-value metric-next">${clock(d.next_at)}</div><small class="muted">${d.pending ? "Opätovné overenie podmienok" : "Časová hranica alebo zmena senzora"}</small></div></div><div class="reason"><strong>Prečo je žalúzia práve tu?</strong><p>${esc(d.reason)}${d.inhibit ? `<br>Pohyb blokuje: ${esc(inhibits[d.inhibit] || d.inhibit)}.` : ""}${rt.fault ? `<br>Chyba: ${esc(rt.fault)}` : ""}</p></div><div class="condition-list">${Object.entries(
@@ -242,7 +265,7 @@ export class CCAZaluziePanel extends HTMLElement {
       )
       .join(
         "",
-      )}</div><div class="section-head"><h3>Priebeh za posledných 24 hodín</h3><span class="sub">Skutočné udalosti</span></div><div class="timeline"><div class="time-labels"><span>${clock(start)}</span><span>${clock(start + 21600)}</span><span>${clock(start + 43200)}</span><span>${clock(start + 64800)}</span><span>teraz</span></div>${track("Poloha", (e) => e.type.startsWith("command") || e.type.startsWith("reset"))}${track("Automatika", (e) => e.type === "decision" || e.type.startsWith("drive"))}${track("Blokácie", (e) => e.type.includes("manual") || Boolean(e.details?.inhibit))}</div><div class="section-head"><h3>Udalosti</h3><span class="sub">Podrobnosti po kliknutí</span></div><div class="event-list">${d.next_at ? `<div class="event-item"><span class="event-time">${clock(d.next_at)}</span><span>Naplánované vyhodnotenie<small>Pred pohybom sa znova overia podmienky.</small></span><span class="event-badge">plánované</span></div>` : ""}${
+      )}</div><div class="section-head"><h3>Priebeh za posledných ${this._historyHours} hodín</h3><select aria-label="Obdobie histórie" data-history="true">${[6, 12, 24, 48].map((h) => `<option value="${h}" ${h === this._historyHours ? "selected" : ""}>${h} hodín</option>`).join("")}</select></div><div class="timeline"><div class="time-labels"><span>${clock(start)}</span><span>${clock(start + span / 4)}</span><span>${clock(start + span / 2)}</span><span>${clock(start + (span * 3) / 4)}</span><span>teraz</span></div>${track("Poloha", (e) => e.type.startsWith("command") || e.type.startsWith("reset"))}${track("Automatika", (e) => e.type === "decision" || e.type.startsWith("drive"))}${track("Blokácie", (e) => e.type.includes("manual") || Boolean(e.details?.inhibit))}</div><div class="section-head"><h3>Udalosti</h3><span class="sub">Podrobnosti po kliknutí</span></div><div class="event-list">${d.next_at ? `<div class="event-item"><span class="event-time">${clock(d.next_at)}</span><span>Naplánované vyhodnotenie<small>Pred pohybom sa znova overia podmienky.</small></span><span class="event-badge">plánované</span></div>` : ""}${
       [...c.events]
         .reverse()
         .slice(0, 50)
@@ -260,7 +283,10 @@ export class CCAZaluziePanel extends HTMLElement {
   }
   _field(f, cfg) {
     const value = cfg[f.key],
-      disabled = f.key === "cover_entity" || (f.depends && !cfg[f.depends]),
+      disabled =
+        this._busy ||
+        f.key === "cover_entity" ||
+        (f.depends && !cfg[f.depends]),
       id = `field-${f.key}`,
       common = `id="${id}" data-key="${esc(f.key)}" ${disabled ? "disabled" : ""}`;
     if (f.kind === "bool")
@@ -325,9 +351,16 @@ export class CCAZaluziePanel extends HTMLElement {
       element.hass = this._hass;
       element.selector = { [f.kind]: {} };
       element.value = copy(this._drafts.get(this._selected)[f.key]);
+      element.disabled = this._busy;
     }
   }
   _input(event) {
+    if (event.target.dataset?.history) {
+      this._historyHours = Number(event.target.value);
+      this._render();
+      return;
+    }
+    if (this._busy) return;
     const input = event.target,
       key = input.dataset?.key;
     if (!key || !this._fields?.[key] || input.disabled) return;
