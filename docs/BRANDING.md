@@ -12,7 +12,7 @@ Flat fills, transparent surrounding canvas, no texture or gradient.
 - `scripts/build_brand.mjs`: reproducible SVG/PNG generation with Playwright.
 
 Home Assistant 2026.3+ discovers custom-integration images in the local `brand/`
-directory. This project requires 2026.10+. No external brand-catalog submission
+directory. This project requires 2026.9+. No external brand-catalog submission
 is needed. Source: [HA brand-image documentation](https://developers.home-assistant.io/docs/core/integration/brand_images/).
 
 The icon module is registered as a global extra frontend module so the sidebar

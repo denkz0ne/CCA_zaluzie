@@ -60,7 +60,7 @@ for key, name, entity, position in [
         }
     )
 fixture = {
-    "version": "2026.10.0",
+    "version": "2026.10.2",
     "groups": module.GROUPS,
     "fields": {key: value.public() for key, value in module.FIELDS.items()},
     "controllers": controllers,

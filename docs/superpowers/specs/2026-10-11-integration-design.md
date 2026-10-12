@@ -12,7 +12,7 @@ Each controller owns serialized service dispatch, timer/state subscriptions,
 versioned persistent runtime state and bounded event history. Pure Python
 configuration and decision modules have no Home Assistant dependencies.
 
-Use Home Assistant 2026.10.0 as the support floor, Python 3.14 for HA integration
+Use Home Assistant 2026.9.0 as the support floor, Python 3.14 for HA integration
 tests, probatio for the current HA schema interface, standard entity selectors,
 config/options flows, HA storage, service contexts and diagnostics. Do not copy
 CCA YAML or Entity Controller source. Link and attribute behavioral references.
