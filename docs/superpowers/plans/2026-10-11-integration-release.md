@@ -6,7 +6,7 @@
 
 **Architecture:** Pure configuration/decision modules feed an independent HA controller per cover. The controller serializes motor commands and persists state/history; HA entities and an authenticated custom panel expose the same controller.
 
-**Tech Stack:** Python 3.14, Home Assistant 2026.10, probatio, pytest, native JavaScript, Playwright, GitHub Actions, HACS.
+**Tech Stack:** Python 3.14, Home Assistant 2026.9+, probatio, pytest, native JavaScript, Playwright, GitHub Actions, HACS.
 
 **Spec:** ../specs/2026-10-11-integration-design.md
 
@@ -14,7 +14,7 @@
 
 - Exactly one cover per config entry/controller and panel row.
 - Preserve applicable CCA behavior; exclude only actuator lamella/tilt control.
-- Home Assistant 2026.10.0 minimum; no integration runtime pip dependencies.
+- Home Assistant 2026.9.0 minimum; no integration runtime pip dependencies. Initial 2026.10.0 floor was revised after verifying 2026.9 compatibility.
 - Reset must confirm lower-end arrival, dwell 60 seconds, then STOP.
 - Never resume interrupted reset on restart; pause inhibits Force dispatch too.
 - Slovak UI labels, stable entry/entity identity, config-flow setup, bounded history.

@@ -11,6 +11,9 @@ jobs:
     strategy:
       matrix:
         include:
+          - ha: '2026.9.4'
+            plugin: '0.13.367'
+            frontend: '20260826.7'
           - ha: '2026.10.0'
             plugin: '0.13.371'
             frontend: '20260930.2'

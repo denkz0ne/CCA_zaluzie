@@ -1,3 +1,10 @@
+# 2026.10.2
+
+- Lower the HACS minimum Home Assistant version to 2026.9.0.
+- The previous 2026.10 floor reflected the development baseline; no required API excludes 2026.9.
+- Verify the 2026.9 API baseline: Probatio, local brand images and frontend custom icons.
+- Add Home Assistant 2026.9.4 to the GitHub test matrix.
+
 # 2026.10.1
 
 - Approved icon concept 02: balanced day/night sky above a blue roller shutter.
