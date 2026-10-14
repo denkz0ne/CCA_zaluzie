@@ -7,6 +7,7 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
+from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import Context
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
@@ -412,6 +413,7 @@ async def test_simulated_motion_advances_only_the_virtual_position(hass, entry):
     config_entry, calls = entry
     controller = config_entry.runtime_data
 
+    physical_position = hass.states.get("cover.blind").attributes["current_position"]
     await controller.async_set_simulation(True)
     controller.simulation_shadow["position"] = 100
     await controller.service("close_cover", {})
@@ -424,7 +426,7 @@ async def test_simulated_motion_advances_only_the_virtual_position(hass, entry):
     position = controller.observe_simulation()[1]
 
     assert 45 <= position <= 55
-    assert hass.states.get("cover.blind").attributes["current_position"] == 100
+    assert hass.states.get("cover.blind").attributes["current_position"] == physical_position
     assert calls == []
 
 
@@ -551,6 +553,11 @@ async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
 
     await controller.async_set_simulation(True)
     await controller.async_control("close")
+    with pytest.raises(OperationError, match="simulovaný pohyb"):
+        await controller.async_set_simulation(False)
+    await controller.sleep(controller.config["drive_time"])
+    if controller.operations.motion_task:
+        await controller.operations.motion_task
     await controller.async_set_simulation(False)
     await hass.async_block_till_done()
 
@@ -558,20 +565,19 @@ async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
     assert controller.snapshot()["simulation"]["enabled"] is False
 
 
-async def test_prediction_has_no_ha_side_effects(hass, entry, monkeypatch):
+async def test_prediction_has_no_ha_side_effects(hass, entry):
     config_entry, calls = entry
     controller = config_entry.runtime_data
     before_runtime = deepcopy(controller.runtime.to_dict())
     before_history = deepcopy(controller.history)
     service_calls = []
-    original_call = hass.services.async_call
-
-    async def count_service(*args, **kwargs):
-        service_calls.append((args, kwargs))
-        return await original_call(*args, **kwargs)
-
-    monkeypatch.setattr(hass.services, "async_call", count_service)
+    remove_listener = hass.bus.async_listen(
+        EVENT_CALL_SERVICE,
+        lambda event: service_calls.append(event.data),
+    )
     result = await controller.async_predict("2026-10-20", 1)
+    await hass.async_block_till_done()
+    remove_listener()
 
     assert result["start_date"] == "2026-10-20"
     assert service_calls == []

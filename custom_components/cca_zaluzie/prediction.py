@@ -201,7 +201,8 @@ def _assumed_snapshot(
                         None,
                     )
                 )
-                assumptions.append(f"Počasie {weather} je iba scenárový predpoklad.")
+                if allowed:
+                    assumptions.append(f"Počasie {weather} je iba scenárový predpoklad.")
         elif weather:
             current_weather = snapshot.get(weather)
             if forecast_data and forecast_data.get("condition"):
@@ -216,7 +217,8 @@ def _assumed_snapshot(
                         "unknown",
                     )
                 )
-                assumptions.append(f"Počasie {weather} je iba scenárový predpoklad.")
+                if config["shade_weather"]:
+                    assumptions.append(f"Počasie {weather} je iba scenárový predpoklad.")
             snapshot.entities[weather] = Reading(condition, current_weather.attributes, moment.timestamp())
 
     if config["instance_entity"]:

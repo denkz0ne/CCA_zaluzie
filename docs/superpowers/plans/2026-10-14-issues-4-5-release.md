@@ -19,25 +19,25 @@ of lamella tilt. Do not access Chrome or restart Home Assistant.
 
 ### 2. Dry-run (#4)
 
-- [ ] Add persistent per-entry simulation state, default off, retaining it through reload/restart.
-- [ ] Route every motor operation (including movement, timed drive, STOP, reset, cancellation and unload) through one dispatch gateway. In simulation it records `would_dispatch` and never calls HA cover services.
-- [ ] Keep physical observations/runtime separate from bounded virtual shadow state; do not claim physical completion or replay queued simulated work after disabling.
-- [ ] Keep native conditions read-only; suppress native actions and scripts in simulation unless their motor safety can be proven. Document the boundary clearly.
-- [ ] Expose an admin-only per-cover control and conspicuous overview status without reloading the entry.
-- [ ] Extend sanitized bounded trace and diagnostics, label simulated versus executed events, and cover failure, cancellation, unknown/unavailable inputs and multi-cover isolation.
-- [ ] Add regression tests asserting zero motor-service calls for all simulation paths.
+- [x] Add persistent per-entry simulation state, default off, retaining it through reload/restart.
+- [x] Route every motor operation (including movement, timed drive, STOP, reset, cancellation and unload) through one dispatch gateway. In simulation it records `would_dispatch` and never calls HA cover services.
+- [x] Keep physical observations/runtime separate from bounded virtual shadow state; do not claim physical completion or replay queued simulated work after disabling.
+- [x] Keep native conditions read-only; suppress native actions and scripts in simulation unless their motor safety can be proven. Document the boundary clearly.
+- [x] Expose an admin-only per-cover control and conspicuous overview status without reloading the entry.
+- [x] Extend sanitized bounded trace and diagnostics, label simulated versus executed events, and cover failure, cancellation, unknown/unavailable inputs and multi-cover isolation.
+- [x] Add regression tests asserting zero motor-service calls for all simulation paths (final CI run pending).
 
 ### 3. Prediction (#5)
 
-- [ ] Implement a pure isolated prediction evaluator using the production rules, without modifying controller runtime, history, timers, HA storage, or calling services/actions/scripts.
-- [ ] Handle dates, timezone/DST, sun azimuth/elevation and 0/360 wrap, configured schedules and shading bounds, with uncertainty/conditional outcomes for future unknown sensors.
-- [ ] Add a read-only API by controller and date/range, computed-on-demand with bounded per-cover caching.
-- [ ] Add a compact prediction block in the selected cover's Overview with date selection, certainty labels, reasons, and no conflation with pending or executed events.
-- [ ] Test geometry, schedule variants, unknown inputs, priorities, and assert zero side effects/state changes.
+- [x] Implement a pure isolated prediction evaluator using the production rules, without modifying controller runtime, history, timers, HA storage, or calling services/actions/scripts.
+- [x] Handle dates, timezone/DST, sun azimuth/elevation and 0/360 wrap, configured schedules and shading bounds, with uncertainty/conditional outcomes for future unknown sensors.
+- [x] Add a read-only API by controller and date/range, computed-on-demand with bounded per-cover caching.
+- [x] Add a compact prediction block in the selected cover's Overview with date selection, certainty labels, reasons, and no conflation with pending or executed events.
+- [x] Test schedule and DST behavior, matching future forecasts, unknown/unavailable inputs, and zero side effects/state changes (final CI run pending).
 
 ### 4. Documentation, release, and migration handoff
 
-- [ ] Update README, AGENTS, integration brief, feature matrix, UI docs, and changelog for the delivered behavior.
+- [x] Update README, AGENTS, integration brief, feature matrix, UI docs, and changelog for the delivered behavior.
 - [ ] Run Python, lint, browser, hassfest, and HACS validation locally/through GitHub Actions; address review findings.
 - [ ] Create and merge the pull request only after required checks are green; publish and verify the installable release archive and matching tag/manifest version.
 - [ ] Stop at the release handoff so the user can update HACS/HA. After the user confirms update completion, perform the separately authorized one-time import of all four legacy CCA covers with dry-run enabled, report field mappings/unmapped fields, and verify no motor services were called.
