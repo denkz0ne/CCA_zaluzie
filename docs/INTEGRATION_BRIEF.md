@@ -3,6 +3,18 @@
 Status: implemented as a Home Assistant custom integration. This document preserves
 the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
+## 2026.11.0 runtime additions
+
+- Home Assistant discovers CCA Žalúzie as a full service integration and the panel's Add action
+  opens its native setup flow.
+- A persistent per-cover dry-run mode uses the normal evaluator and live HA inputs while routing
+  every motor command through a no-call gateway. It stores a separate simulated runtime and
+  interpolated shadow position; native actions/scripts are recorded as suppressed. Disabling
+  simulation never replays a virtual command.
+- Overview prediction evaluates copied state with the production engine for a selected local date
+  and a 1–7 day horizon. It reads matching future provider forecasts when available and labels
+  uncertain future inputs. The endpoint performs no service calls or persistent/runtime writes.
+
 ## User goal
 
 Create a Home Assistant custom integration that manages multiple blinds/shutters from one config-flow-driven integration and presents a polished per-cover control dashboard. The behavioral reference is the latest upstream Cover Control Automation (CCA). The visual and functional layout reference is the user's **Svetlo v tme** / **Entity Controller (EC)** integration. This is not an instruction to clone either project's code.

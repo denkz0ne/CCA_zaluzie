@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import random
 from collections import deque
 from contextlib import suppress
 from contextvars import ContextVar
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -76,7 +78,9 @@ class CoverController:
         self._last_decision = None
         self._forecast: dict = {}
         self._forecast_conditions: dict = {}
+        self._future_forecasts: dict[str, list[dict]] = {}
         self._calendar: list = []
+        self._prediction_cache: dict[str, dict] = {}
 
     def now(self) -> float:
         return dt_util.utcnow().timestamp() + self._simulation_elapsed
@@ -87,6 +91,14 @@ class CoverController:
     async def sleep(self, seconds: float) -> None:
         if self.simulation_enabled:
             self._simulation_elapsed += max(0, seconds)
+            previous_position = (
+                round(self.simulation_shadow.get("position"))
+                if self.simulation_shadow and self.simulation_shadow.get("position") is not None
+                else None
+            )
+            _, position = self.observe_simulation()
+            if position is not None and round(position) != previous_position:
+                self._notify()
             await asyncio.sleep(0)
             return
         await asyncio.sleep(seconds)
@@ -120,9 +132,18 @@ class CoverController:
         available, physical_position = self.observe()
         if not self.simulation_enabled:
             return available, physical_position
-        shadow_position = (
-            self.simulation_shadow.get("position") if self.simulation_shadow else None
-        )
+        shadow = self.simulation_shadow
+        if shadow and shadow.get("motion"):
+            motion = shadow["motion"]
+            elapsed = max(0.0, self.now() - motion["started"])
+            progress = min(1.0, elapsed / motion["duration"])
+            shadow["position"] = motion["from"] + (
+                motion["target"] - motion["from"]
+            ) * progress
+            if progress >= 1:
+                shadow["position"] = motion["target"]
+                shadow["motion"] = None
+        shadow_position = shadow.get("position") if shadow else None
         return available, shadow_position if shadow_position is not None else physical_position
 
     async def _dispatch_motor_service(
@@ -138,6 +159,7 @@ class CoverController:
                     "calibrated": False,
                     "motion": None,
                 }
+            _, current_position = self.observe_simulation()
             target = data.get("position")
             if target is None and self.runtime.command:
                 target = self.runtime.command.get("target")
@@ -146,21 +168,29 @@ class CoverController:
             elif target is None and service == "close_cover":
                 target = 0
             if service == "set_cover_position":
-                shadow["position"] = data.get("position")
+                target = data.get("position")
+            if service in ("open_cover", "close_cover", "set_cover_position"):
                 shadow["calibrated"] = False
-                shadow["motion"] = None
-            elif service in ("open_cover", "close_cover"):
-                shadow["position"] = target
-                shadow["calibrated"] = False
+                duration = (
+                    self.config["drive_time"]
+                    * (abs(target - current_position) / 100 if current_position is not None else 1)
+                    if target is not None
+                    else 0
+                )
+                if target is None or duration <= 0:
+                    shadow["position"] = target
+                    shadow["motion"] = None
+                else:
+                    shadow["motion"] = {
+                        "service": service,
+                        "from": current_position if current_position is not None else target,
+                        "target": target,
+                        "started": self.now(),
+                        "duration": duration,
+                    }
             elif service == "stop_cover":
+                self.observe_simulation()
                 shadow["motion"] = None
-            if service in ("open_cover", "close_cover"):
-                shadow["motion"] = {
-                    "service": service,
-                    "target": target,
-                    "started": self.now(),
-                    "duration": self.config["drive_time"],
-                }
             await self.record(
                 "would_dispatch",
                 {
@@ -234,6 +264,13 @@ class CoverController:
             or (self.runtime.command or {}).get("status") in ("moving", "requested")
         ):
             raise OperationError("Počkaj, kým sa pohyb žalúzie dokončí, potom zapni simuláciu")
+        if not enabled and (
+            self.operations.lock.locked()
+            or self.operations.resetting
+            or (self.runtime.command or {}).get("status") in ("moving", "requested")
+            or (self.simulation_shadow or {}).get("motion") is not None
+        ):
+            raise OperationError("Počkaj, kým sa simulovaný pohyb dokončí, potom vypni simuláciu")
 
         task = self._dispatch_task
         if task and not task.done():
@@ -440,6 +477,7 @@ class CoverController:
 
     async def _refresh_sources(self, _now=None) -> None:
         weather = self.config["forecast_entity"]
+        self._future_forecasts.clear()
         if weather and self.config["forecast_type"] == "weather_attributes":
             state = self.hass.states.get(weather)
             self._forecast[weather] = (
@@ -461,14 +499,23 @@ class CoverController:
                 )
                 forecasts = response.get(weather, {}).get("forecast", [])
                 forecast = forecasts[0] if forecasts else {}
+                self._future_forecasts[weather] = [
+                    item
+                    for item in forecasts
+                    if isinstance(item, dict) and item.get("datetime")
+                ]
                 self._forecast[weather] = Reading(
                     str(forecast.get("temperature", "unknown"))
                 ).number()
                 self._forecast_conditions[weather] = forecast.get("condition")
             except Exception as error:
+                self._future_forecasts.clear()
                 self._forecast[weather] = None
                 self._forecast_conditions[weather] = None
                 _LOGGER.warning("%s forecast unavailable: %s", self.entry.title, error)
+        elif weather:
+            self._forecast[weather] = None
+            self._forecast_conditions[weather] = None
         calendar = self.config["calendar_entity"]
         if (
             self.config["calendar_enabled"]
@@ -484,7 +531,7 @@ class CoverController:
                         "start_date_time": dt_util.now()
                         .replace(hour=0, minute=0, second=0, microsecond=0)
                         .isoformat(),
-                        "end_date_time": (dt_util.now() + timedelta(days=2)).isoformat(),
+                        "end_date_time": (dt_util.now() + timedelta(days=8)).isoformat(),
                     },
                     blocking=True,
                     return_response=True,
@@ -517,7 +564,14 @@ class CoverController:
                     }
                 )
             )
-        return Snapshot(entities, self._forecast, self._calendar, gates, self._forecast_conditions)
+        return Snapshot(
+            entities,
+            self._forecast,
+            self._calendar,
+            gates,
+            self._forecast_conditions,
+            deepcopy(self._future_forecasts),
+        )
 
     async def async_evaluate(self) -> None:
         if not self._active:
@@ -782,9 +836,12 @@ class CoverController:
             )
 
     async def record(self, event: str, details: dict) -> None:
+        recorded_at = (
+            dt_util.utc_from_timestamp(self.now()) if self.simulation_enabled else dt_util.utcnow()
+        )
         record = {
             "id": uuid4().hex,
-            "at": dt_util.utcnow().isoformat(),
+            "at": recorded_at.isoformat(),
             "type": event,
             "details": deepcopy(details),
         }
@@ -798,7 +855,11 @@ class CoverController:
         self.history = [
             x for x in self.history if dt_util.parse_datetime(x["at"]).timestamp() >= cutoff
         ][-int(self.config["history_limit"]) :]
-        log = _LOGGER.warning if "failed" in event or "interrupted" in event else _LOGGER.debug
+        log = (
+            _LOGGER.warning
+            if not self.simulation_enabled and ("failed" in event or "interrupted" in event)
+            else _LOGGER.debug
+        )
         log("%s: %s %s", self.entry.title, event, details)
         await self._persist()
         if self.config["logbook"] and event != "decision" and not self.simulation_enabled:
@@ -816,7 +877,10 @@ class CoverController:
                 },
             )
         self._notify()
-        if event == "reset_completed" and self.config["position_source"] == "drive_time":
+        if (
+            event in ("reset_completed", "simulated_reset_completed")
+            and self.config["position_source"] == "drive_time"
+        ):
             self.runtime.estimated_position = 0
         if event in _TERMINAL_RESET and self._active:
             self._spawn(self.async_evaluate())
@@ -870,6 +934,74 @@ class CoverController:
             },
             "server_time": self.now(),
         }
+
+    async def async_predict(self, start_date: str, days: int = 2) -> dict[str, Any]:
+        """Return an isolated forecast without calling HA services or mutating state."""
+        try:
+            selected_date = date.fromisoformat(start_date)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Dátum predikcie musí byť vo formáte YYYY-MM-DD") from error
+        if type(days) is not int or not 1 <= days <= 7:
+            raise ValueError("Rozsah predikcie musí byť od 1 do 7 dní")
+
+        from .prediction import compute_prediction
+
+        current = self._snapshot_inputs()
+        base = Snapshot(
+            entities=deepcopy(current.entities),
+            forecasts=deepcopy(current.forecasts),
+            calendar_events=deepcopy(current.calendar_events),
+            gates={},
+            forecast_conditions=deepcopy(current.forecast_conditions),
+            future_forecasts=deepcopy(current.future_forecasts),
+        )
+        source_runtime = self._physical_runtime or self.runtime
+        runtime = Runtime.from_dict(source_runtime.to_dict())
+        cache_key = hashlib.sha256(
+            json.dumps(
+                {
+                    "config": self.config,
+                    "runtime": runtime.to_dict(),
+                    "entities": {
+                        entity: {
+                            "state": reading.state,
+                            "attributes": reading.attributes,
+                            "changed_at": reading.changed_at,
+                        }
+                        for entity, reading in base.entities.items()
+                    },
+                    "forecasts": base.forecasts,
+                    "conditions": base.forecast_conditions,
+                    "future_forecasts": base.future_forecasts,
+                    "calendar": base.calendar_events,
+                    "date": start_date,
+                    "days": days,
+                    "cache_minute": int(dt_util.utcnow().timestamp() // 60),
+                    "location": [self.hass.config.latitude, self.hass.config.longitude],
+                    "timezone": self.hass.config.time_zone,
+                },
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()
+        if cache_key in self._prediction_cache:
+            return deepcopy(self._prediction_cache[cache_key])
+
+        result = await self.hass.async_add_executor_job(
+            compute_prediction,
+            deepcopy(self.config),
+            runtime,
+            base,
+            self.hass.config.time_zone,
+            self.hass.config.latitude,
+            self.hass.config.longitude,
+            selected_date,
+            days,
+        )
+        self._prediction_cache[cache_key] = deepcopy(result)
+        while len(self._prediction_cache) > 8:
+            self._prediction_cache.pop(next(iter(self._prediction_cache)))
+        return result
 
     async def async_control(
         self, action: str, position: float | None = None, *, context: Context | None = None

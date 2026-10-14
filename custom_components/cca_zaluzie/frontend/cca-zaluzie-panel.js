@@ -106,10 +106,19 @@ const eventNames = {
   drive_cancelled: "Pohyb zrušený",
   action_failed: "Akcia zlyhala",
   custom_action_completed: "Vlastná akcia dokončená",
-  would_dispatch: "Simulácia: motor dostal by tento povel",
+  would_dispatch: "Simulácia: motorový povel by sa odoslal",
   action_suppressed: "Simulácia: používateľská akcia zablokovaná",
   simulation_enabled: "Simulácia zapnutá",
   simulation_disabled: "Simulácia vypnutá",
+  simulated_command_completed: "Simulovaný povel dokončený",
+  simulated_reset_completed: "Simulovaný reset dokončený",
+};
+const predictionNames = {
+  computed: "Vypočítané",
+  estimated: "Odhadované",
+  conditional: "Podmienené",
+  blocked: "Blokované",
+  unknown: "Nedá sa určiť",
 };
 const clock = (ts) =>
   ts
@@ -119,7 +128,7 @@ const clock = (ts) =>
       )
     : "Pri zmene podmienok";
 const styleURL = new URL("./panel.css", import.meta.url).href;
-const extraCSS = `:host{display:block;min-height:100%;font:14px Roboto,'Segoe UI',Arial,sans-serif;color:var(--primary-text-color,#202a33);background:var(--primary-background-color,#f4f6f8);--surface:var(--card-background-color,#fff);--line:var(--divider-color,#e3e7eb);--muted:var(--secondary-text-color,#687681);--primary:var(--primary-color,#1677c8);--primary-soft:color-mix(in srgb,var(--primary) 12%,var(--surface))}button{font:inherit;border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:8px;padding:8px 11px}button:disabled{opacity:.45;cursor:default}a{color:var(--primary)}.page-head a{margin-left:auto;text-decoration:none;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.cover-row{grid-template-columns:36px minmax(0,1fr)}.cover-sub{overflow-wrap:anywhere}.cover-name{display:block}.row-status{display:block;margin-top:6px;font-size:11px;color:#20845a}.simulation-banner{display:flex;align-items:center;gap:12px;margin:12px 20px 0;padding:12px 14px;border:1px solid #e1aa4c;border-radius:9px;background:#fff7e7;color:#76500d}.simulation-banner strong{display:block}.simulation-banner span{font-size:12px}.simulation-banner button{margin-left:auto}.simulated-badge{font-size:10px;color:#9a6500;font-weight:700}.panel{background:var(--surface)}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px 20px}.metric-next{font-size:17px}.reason p{color:var(--muted)}.track-dot{position:absolute;top:4px;width:14px;height:14px;border:2px solid var(--surface);background:#237fba;border-radius:50%;padding:0;transform:translateX(-50%)}.track-dot.warn{background:#d18a1d}.track-dot.bad{background:#c64848}.track-dot.manual{background:#815bb0}.event-item{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;grid-template-columns:54px minmax(0,1fr) auto}.event-item small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.reset{margin:14px 20px;padding:13px;border:1px solid #f0d59f;border-radius:10px;background:#fff9eb;color:#77500d}.reset p{font-size:11px;line-height:1.5}.reset-clock{margin-left:auto;font-size:18px;font-variant-numeric:tabular-nums}.bottom-actions{padding:0 20px 18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.config-body h2{margin-bottom:16px}.field input,.field select{background:var(--surface);color:inherit;min-width:0}.choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.choice{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:12px;cursor:pointer}.choice input{width:15px;min-height:0;margin:0;accent-color:var(--primary)}.help span{left:0;transform:none}.form-footer{background:var(--surface)}.draft-state{margin-right:auto;font-size:11px;color:var(--muted)}.summary-row{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:11px 0;font-size:12px}.summary-row span{color:var(--muted);text-align:right;overflow-wrap:anywhere}.error{padding:12px 15px;margin-bottom:16px;border:1px solid #e6b0b0;border-radius:9px;background:#fff1f1;color:#9c3030;font-size:13px}.toast{pointer-events:none;opacity:1;max-width:calc(100vw - 30px)}.empty{padding:24px;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;max-width:680px;width:calc(100vw - 32px);padding:20px}dialog::backdrop{background:#0006}dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.6;max-height:60vh;overflow:auto}.dialog-top{display:flex;align-items:center;justify-content:space-between}.condition-list{padding:0 20px 17px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap}.condition-chip{padding:5px 8px;border-radius:6px;background:var(--primary-soft)}.advanced-note{padding:12px;border:1px solid var(--line);border-radius:9px;font-size:12px;line-height:1.6}.muted{color:var(--muted)}@media(max-width:700px){.metrics{gap:10px}.choices{grid-template-columns:1fr}.event-item{grid-template-columns:42px minmax(0,1fr)}.bottom-actions{justify-content:flex-start}.draft-state{flex-basis:100%}.page-head{gap:12px}.page-head a{margin-left:0}.config-body{padding:16px}.help span{max-width:210px}}`;
+const extraCSS = `:host{display:block;min-height:100%;font:14px Roboto,'Segoe UI',Arial,sans-serif;color:var(--primary-text-color,#202a33);background:var(--primary-background-color,#f4f6f8);--surface:var(--card-background-color,#fff);--line:var(--divider-color,#e3e7eb);--muted:var(--secondary-text-color,#687681);--primary:var(--primary-color,#1677c8);--primary-soft:color-mix(in srgb,var(--primary) 12%,var(--surface))}button{font:inherit;border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:8px;padding:8px 11px}button:disabled{opacity:.45;cursor:default}a{color:var(--primary)}.page-head a{margin-left:auto;text-decoration:none;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.cover-row{grid-template-columns:36px minmax(0,1fr)}.cover-sub{overflow-wrap:anywhere}.cover-name{display:block}.row-status{display:block;margin-top:6px;font-size:11px;color:#20845a}.simulation-banner{display:flex;align-items:center;gap:12px;margin:12px 20px 0;padding:12px 14px;border:1px solid #e1aa4c;border-radius:9px;background:#fff7e7;color:#76500d}.simulation-banner strong{display:block}.simulation-banner span{font-size:12px}.simulation-banner button{margin-left:auto}.simulated-badge{font-size:10px;color:#9a6500;font-weight:700}.prediction{margin:0 20px 18px;padding:14px;border:1px solid var(--line);border-radius:10px}.prediction-controls{display:flex;gap:8px}.prediction-controls input,.prediction-controls select{max-width:180px;min-width:0;background:var(--surface);color:inherit;border:1px solid var(--line);border-radius:7px;padding:6px}.prediction-list{margin-top:8px}.prediction+.condition-list{padding-top:0}.panel{background:var(--surface)}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px 20px}.metric-next{font-size:17px}.reason p{color:var(--muted)}.track-dot{position:absolute;top:4px;width:14px;height:14px;border:2px solid var(--surface);background:#237fba;border-radius:50%;padding:0;transform:translateX(-50%)}.track-dot.warn{background:#d18a1d}.track-dot.bad{background:#c64848}.track-dot.manual{background:#815bb0}.simulation-filters{display:flex;align-items:center;gap:8px;margin:0 20px 8px;color:var(--muted);font-size:12px}.simulation-filters select{background:var(--surface);color:inherit;border:1px solid var(--line);border-radius:7px;padding:5px}.event-item{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;grid-template-columns:54px minmax(0,1fr) auto}.event-item small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.reset{margin:14px 20px;padding:13px;border:1px solid #f0d59f;border-radius:10px;background:#fff9eb;color:#77500d}.reset p{font-size:11px;line-height:1.5}.reset-clock{margin-left:auto;font-size:18px;font-variant-numeric:tabular-nums}.bottom-actions{padding:0 20px 18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.config-body h2{margin-bottom:16px}.field input,.field select{background:var(--surface);color:inherit;min-width:0}.choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.choice{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:12px;cursor:pointer}.choice input{width:15px;min-height:0;margin:0;accent-color:var(--primary)}.help span{left:0;transform:none}.form-footer{background:var(--surface)}.draft-state{margin-right:auto;font-size:11px;color:var(--muted)}.summary-row{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:11px 0;font-size:12px}.summary-row span{color:var(--muted);text-align:right;overflow-wrap:anywhere}.error{padding:12px 15px;margin-bottom:16px;border:1px solid #e6b0b0;border-radius:9px;background:#fff1f1;color:#9c3030;font-size:13px}.toast{pointer-events:none;opacity:1;max-width:calc(100vw - 30px)}.empty{padding:24px;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;max-width:680px;width:calc(100vw - 32px);padding:20px}dialog::backdrop{background:#0006}dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.6;max-height:60vh;overflow:auto}.dialog-top{display:flex;align-items:center;justify-content:space-between}.condition-list{padding:0 20px 17px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap}.condition-chip{padding:5px 8px;border-radius:6px;background:var(--primary-soft)}.advanced-note{padding:12px;border:1px solid var(--line);border-radius:9px;font-size:12px;line-height:1.6}.muted{color:var(--muted)}@media(max-width:700px){.metrics{gap:10px}.choices{grid-template-columns:1fr}.event-item{grid-template-columns:42px minmax(0,1fr)}.bottom-actions{justify-content:flex-start}.draft-state{flex-basis:100%}.page-head{gap:12px}.page-head a{margin-left:0}.config-body{padding:16px}.help span{max-width:210px}.prediction-controls{flex-wrap:wrap}.prediction-controls input,.prediction-controls select{max-width:100%}}`;
 
 export class CCAZaluziePanel extends HTMLElement {
   constructor() {
@@ -136,6 +145,11 @@ export class CCAZaluziePanel extends HTMLElement {
     this._notice = "";
     this._busy = false;
     this._historyHours = 24;
+    this._predictions = new Map();
+    this._predictionDate = new Intl.DateTimeFormat("sv-SE").format(new Date());
+    this._predictionDays = 2;
+    this._predictionError = "";
+    this._simulationFilter = "all";
     this.shadowRoot.addEventListener("click", (e) => this._click(e));
     this.shadowRoot.addEventListener("input", (e) => this._input(e));
     this.shadowRoot.addEventListener("change", (e) => this._input(e));
@@ -155,6 +169,7 @@ export class CCAZaluziePanel extends HTMLElement {
   }
   disconnectedCallback() {
     clearInterval(this._clock);
+    clearTimeout(this._predictionTimer);
     if (this._unsubscribe) this._unsubscribe();
     this._unsubscribe = null;
     this._connection = null;
@@ -175,8 +190,9 @@ export class CCAZaluziePanel extends HTMLElement {
       const unsub = await this._connection.subscribeMessage(
         (event) => {
           const p = event.event || event;
-          if (p.controller) this._update(p.controller);
-          else {
+          if (p.controller) {
+            this._update(p.controller);
+          } else {
             this._controllers.delete(p.entry_id);
             if (this._selected === p.entry_id) {
               this._selected = this._controllers.keys().next().value;
@@ -191,6 +207,7 @@ export class CCAZaluziePanel extends HTMLElement {
       );
       if (this.isConnected) this._unsubscribe = unsub;
       else unsub();
+      if (this._selected) this._loadPrediction(this._selected);
     } catch (e) {
       this._error = e.message || String(e);
       this._render();
@@ -246,6 +263,7 @@ export class CCAZaluziePanel extends HTMLElement {
       interrupted: "Reset bol prerušený",
       cancelled: "Reset bol zrušený",
       completed: "Reset bol dokončený",
+      simulated_completed: "Reset bol dokončený iba v simulácii",
     };
     const now = Date.now() / 1000 + (this._offset || 0),
       span = this._historyHours * 3600,
@@ -253,6 +271,37 @@ export class CCAZaluziePanel extends HTMLElement {
       history = c.events
         .filter((e) => Date.parse(e.at) / 1000 >= start)
         .slice(-150);
+    const simulationEvents = [...c.events]
+      .reverse()
+      .filter((event) => event.simulated)
+      .filter((event) => {
+        if (this._simulationFilter === "all") return true;
+        if (this._simulationFilter === "would_dispatch")
+          return event.type === "would_dispatch";
+        if (this._simulationFilter === "blocked")
+          return (
+            Boolean(event.details?.inhibit) ||
+            ["drive_cancelled", "action_suppressed"].includes(event.type)
+          );
+        if (this._simulationFilter === "errors")
+          return (
+            /failed|interrupted/.test(event.type) ||
+            Boolean(event.details?.error)
+          );
+        if (this._simulationFilter === "timers")
+          return /timer|pending|reset_dwell|reset_started/.test(event.type);
+        return event.type === "decision";
+      })
+      .slice(0, 50);
+    const visibleEvents = simulation
+      ? simulationEvents
+      : [...c.events].reverse().slice(0, 50);
+    const eventItems = visibleEvents
+      .map(
+        (e) =>
+          `<button class="event-item" data-event="${esc(e.id)}"><span class="event-time">${clock(e.at)}</span><span>${esc(eventNames[e.type] || e.type)}${e.simulated ? '<small class="simulated-badge">SIMULOVANÉ</small>' : ""}<small>${esc(e.details?.reason || e.details?.error || modes[e.details?.mode] || "")}</small></span><span class="event-badge">${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</span></button>`,
+      )
+      .join("");
     const track = (name, filter) =>
       `<div class="timeline-row"><span class="track-name">${name}</span><div class="track">${history
         .filter(filter)
@@ -261,7 +310,7 @@ export class CCAZaluziePanel extends HTMLElement {
             `<button class="track-dot ${e.type.includes("failed") ? "bad" : e.type.includes("manual") ? "manual" : e.details?.inhibit ? "warn" : ""}" style="left:${Math.max(1, Math.min(99, (Date.parse(e.at) / 1000 - start) / (span / 100)))}%" data-event="${esc(e.id)}" title="${esc(eventNames[e.type] || e.type)} · ${clock(e.at)}" aria-label="${esc(eventNames[e.type] || e.type)} ${clock(e.at)}"></button>`,
         )
         .join("")}</div></div>`;
-    return `<div class="panel detail"><div class="detail-top"><span class="big-cover">▥</span><div class="detail-title"><h2>${esc(c.name)}</h2><p>${esc(c.cover_entity)}</p></div><div class="detail-actions"><button data-action="open" ${disabled}><span aria-hidden="true">↑</span> Otvoriť</button><button data-action="close" ${disabled}><span aria-hidden="true">↓</span> Zatvoriť</button><button data-action="stop" ${!c.available ? "disabled" : ""}>■ Stop</button><button data-view="settings" aria-label="Nastavenia žalúzie">⚙</button></div></div><div class="status-strip"><span class="pill ${d.inhibit ? "amber" : "green"}">${esc(inhibits[d.inhibit] || modes[d.mode] || d.mode)}</span><span>Cieľ ${d.target == null ? "neurčený" : `${esc(d.target)} %`}</span>${d.pending ? `<span class="pill amber">${d.pending === "shade_start" ? "Čaká na potvrdenie tienenia" : "Čaká na koniec tienenia"}</span>` : ""}<button class="quiet-btn" data-action="${c.config.enabled ? "disable" : "enable"}" ${this._busy ? "disabled" : ""}>${c.config.enabled ? "Pozastaviť automatiku" : "Zapnúť automatiku"}</button></div>${simulation ? `<div class="simulation-banner" role="status"><div><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Rozhodnutia a povely sa zaznamenávajú bez ovládania žalúzie.</span></div><button data-action="simulation_off" ${this._busy ? "disabled" : ""}>Vypnúť simuláciu</button></div>` : `<div class="simulation-banner"><div><strong>Simulácia pohybu</strong><span>Vyskúšaj rozhodovanie bez pohybu motora.</span></div><button data-action="simulation_on" ${this._busy ? "disabled" : ""}>Zapnúť simuláciu</button></div>`}<div class="metrics"><div><div class="metric-label">Skutočná poloha</div><div class="metric-value">${c.position == null ? "Neznáma" : `${esc(c.position)} %`}</div><div class="position-meter"><span style="width:${percent}%"></span></div>${simulation && c.simulation?.shadow?.position != null ? `<small class="simulated-badge">Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : rt.estimated_position != null && c.position == null ? `<small class="muted">Odhad: ${esc(rt.estimated_position)} %</small>` : ""}</div><div><div class="metric-label">Najbližšia udalosť</div><div class="metric-value metric-next">${clock(d.next_at)}</div><small class="muted">${d.pending ? "Opätovné overenie podmienok" : "Časová hranica alebo zmena senzora"}</small></div></div><div class="reason"><strong>Prečo je žalúzia práve tu?</strong><p>${esc(d.reason)}${d.inhibit ? `<br>Pohyb blokuje: ${esc(inhibits[d.inhibit] || d.inhibit)}.` : ""}${rt.fault ? `<br>Chyba: ${esc(rt.fault)}` : ""}</p></div><div class="condition-list">${Object.entries(
+    return `<div class="panel detail"><div class="detail-top"><span class="big-cover">▥</span><div class="detail-title"><h2>${esc(c.name)}</h2><p>${esc(c.cover_entity)}</p></div><div class="detail-actions"><button data-action="open" ${disabled}><span aria-hidden="true">↑</span> Otvoriť</button><button data-action="close" ${disabled}><span aria-hidden="true">↓</span> Zatvoriť</button><button data-action="stop" ${!c.available ? "disabled" : ""}>■ Stop</button><button data-view="settings" aria-label="Nastavenia žalúzie">⚙</button></div></div><div class="status-strip"><span class="pill ${d.inhibit ? "amber" : "green"}">${esc(inhibits[d.inhibit] || modes[d.mode] || d.mode)}</span><span>Cieľ ${d.target == null ? "neurčený" : `${esc(d.target)} %`}</span>${d.pending ? `<span class="pill amber">${d.pending === "shade_start" ? "Čaká na potvrdenie tienenia" : "Čaká na koniec tienenia"}</span>` : ""}<button class="quiet-btn" data-action="${c.config.enabled ? "disable" : "enable"}" ${this._busy ? "disabled" : ""}>${c.config.enabled ? "Pozastaviť automatiku" : "Zapnúť automatiku"}</button></div>${simulation ? `<div class="simulation-banner" role="status"><div><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Rozhodnutia a povely sa zaznamenávajú bez ovládania žalúzie.</span></div><button data-action="simulation_off" ${this._busy ? "disabled" : ""}>Vypnúť simuláciu</button></div>` : `<div class="simulation-banner"><div><strong>Simulácia pohybu</strong><span>Vyskúšaj rozhodovanie bez pohybu motora.</span></div><button data-action="simulation_on" ${this._busy ? "disabled" : ""}>Zapnúť simuláciu</button></div>`}<div class="metrics"><div><div class="metric-label">Skutočná poloha</div><div class="metric-value">${c.position == null ? "Neznáma" : `${esc(c.position)} %`}</div><div class="position-meter"><span style="width:${percent}%"></span></div>${simulation && c.simulation?.shadow?.position != null ? `<small class="simulated-badge">Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : rt.estimated_position != null && c.position == null ? `<small class="muted">Odhad: ${esc(rt.estimated_position)} %</small>` : ""}</div><div><div class="metric-label">Najbližšia udalosť</div><div class="metric-value metric-next">${clock(d.next_at)}</div><small class="muted">${d.pending ? "Opätovné overenie podmienok" : "Časová hranica alebo zmena senzora"}</small></div></div><div class="reason"><strong>Prečo je žalúzia práve tu?</strong><p>${esc(d.reason)}${d.inhibit ? `<br>Pohyb blokuje: ${esc(inhibits[d.inhibit] || d.inhibit)}.` : ""}${rt.fault ? `<br>Chyba: ${esc(rt.fault)}` : ""}</p></div>${this._predictionBlock(c)}<div class="condition-list">${Object.entries(
       d.conditions || {},
     )
       .filter(([k]) => k.startsWith("shade.") && c.config.shading_enabled)
@@ -271,21 +320,37 @@ export class CCAZaluziePanel extends HTMLElement {
       )
       .join(
         "",
-      )}</div><div class="section-head"><h3>Priebeh za posledných ${this._historyHours} hodín</h3><select aria-label="Obdobie histórie" data-history="true">${[6, 12, 24, 48].map((h) => `<option value="${h}" ${h === this._historyHours ? "selected" : ""}>${h} hodín</option>`).join("")}</select></div><div class="timeline"><div class="time-labels"><span>${clock(start)}</span><span>${clock(start + span / 4)}</span><span>${clock(start + span / 2)}</span><span>${clock(start + (span * 3) / 4)}</span><span>teraz</span></div>${track("Poloha", (e) => e.type.startsWith("command") || e.type.startsWith("reset"))}${track("Automatika", (e) => e.type === "decision" || e.type.startsWith("drive"))}${track("Blokácie", (e) => e.type.includes("manual") || Boolean(e.details?.inhibit))}</div><div class="section-head"><h3>Udalosti</h3><span class="sub">Podrobnosti po kliknutí</span></div><div class="event-list">${d.next_at ? `<div class="event-item"><span class="event-time">${clock(d.next_at)}</span><span>Naplánované vyhodnotenie<small>Pred pohybom sa znova overia podmienky.</small></span><span class="event-badge">plánované</span></div>` : ""}${
-      [...c.events]
-        .reverse()
-        .slice(0, 50)
-        .map(
-          (e) =>
-            `<button class="event-item" data-event="${esc(e.id)}"><span class="event-time">${clock(e.at)}</span><span>${esc(eventNames[e.type] || e.type)}${e.simulated ? '<small class="simulated-badge">SIMULOVANÉ</small>' : ""}<small>${esc(e.details?.reason || e.details?.error || modes[e.details?.mode] || "")}</small></span><span class="event-badge">${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</span></button>`,
-        )
-        .join("") || '<p class="muted">Zatiaľ bez udalostí.</p>'
-    }</div>${r ? `<div class="reset"><div class="reset-line"><span>${esc(resetNames[r.status] || r.status)}</span>${resetting ? `<span class="reset-clock" data-due="${Number(r.due) || 0}"></span>` : ""}</div><p>${esc(r.error || "Úplné spustenie, 60 sekúnd na doraze a následne STOP.")}</p>${resetting ? '<button class="quiet-btn" data-action="cancel_reset">Zrušiť reset</button>' : ""}</div>` : ""}<div class="bottom-actions">${c.config.shading_enabled ? `<button data-action="shade" ${disabled}>Tieniť</button>` : ""}${c.config.ventilation_enabled ? `<button data-action="ventilate" ${disabled}>Vetrať</button>` : ""}<button data-action="reset" ${disabled}>Reset polohy</button><button class="quiet-btn" data-action="clear_override" ${resetting ? "disabled" : ""}>Ukončiť ručný režim</button><button class="quiet-btn" data-action="reconcile" ${disabled}>Prepočítať cieľ</button></div></div>`;
+      )}</div><div class="section-head"><h3>Priebeh za posledných ${this._historyHours} hodín</h3><select aria-label="Obdobie histórie" data-history="true">${[6, 12, 24, 48].map((h) => `<option value="${h}" ${h === this._historyHours ? "selected" : ""}>${h} hodín</option>`).join("")}</select></div><div class="timeline"><div class="time-labels"><span>${clock(start)}</span><span>${clock(start + span / 4)}</span><span>${clock(start + span / 2)}</span><span>${clock(start + (span * 3) / 4)}</span><span>teraz</span></div>${track("Poloha", (e) => e.type.startsWith("command") || e.type.startsWith("reset"))}${track("Automatika", (e) => e.type === "decision" || e.type.startsWith("drive"))}${track("Blokácie", (e) => e.type.includes("manual") || Boolean(e.details?.inhibit))}</div><div class="section-head"><h3>Udalosti</h3><span class="sub">Podrobnosti po kliknutí</span></div>${
+      simulation
+        ? `<div class="simulation-filters"><label for="simulation-filter">Filtrovať simuláciu</label><select id="simulation-filter" aria-label="Filtrovať simuláciu" data-simulation-filter>${[
+            ["all", "Všetky"],
+            ["decision", "Rozhodnutia"],
+            ["timers", "Časovače"],
+            ["would_dispatch", "Odoslalo by sa"],
+            ["blocked", "Blokované"],
+            ["errors", "Chyby"],
+          ]
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${value === this._simulationFilter ? "selected" : ""}>${label}</option>`,
+            )
+            .join("")}</select></div>`
+        : ""
+    }<div class="event-list">${d.next_at ? `<div class="event-item"><span class="event-time">${clock(d.next_at)}</span><span>Naplánované vyhodnotenie<small>Pred pohybom sa znova overia podmienky.</small></span><span class="event-badge">plánované</span></div>` : ""}${eventItems || '<p class="muted">Zatiaľ bez udalostí.</p>'}</div>${r ? `<div class="reset"><div class="reset-line"><span>${esc(resetNames[r.status] || r.status)}</span>${resetting ? `<span class="reset-clock" data-due="${Number(r.due) || 0}"></span>` : ""}</div><p>${esc(r.error || "Úplné spustenie, 60 sekúnd na doraze a následne STOP.")}</p>${resetting ? '<button class="quiet-btn" data-action="cancel_reset">Zrušiť reset</button>' : ""}</div>` : ""}<div class="bottom-actions">${c.config.shading_enabled ? `<button data-action="shade" ${disabled}>Tieniť</button>` : ""}${c.config.ventilation_enabled ? `<button data-action="ventilate" ${disabled}>Vetrať</button>` : ""}<button data-action="reset" ${disabled}>Reset polohy</button><button class="quiet-btn" data-action="clear_override" ${resetting ? "disabled" : ""}>Ukončiť ručný režim</button><button class="quiet-btn" data-action="reconcile" ${disabled}>Prepočítať cieľ</button></div></div>`;
   }
   _help(f) {
     return f.help
       ? `<button type="button" class="help" aria-label="Pomoc: ${esc(f.label)}" aria-describedby="help-${esc(f.key)}">?<span id="help-${esc(f.key)}" role="tooltip">${esc(f.help)}</span></button>`
       : "";
+  }
+  _predictionBlock(c) {
+    const prediction = this._predictions.get(c.entry_id);
+    const current =
+      prediction?.start_date === this._predictionDate &&
+      prediction?.days === this._predictionDays;
+    const events = current ? prediction.events || [] : [];
+    const assumptions = current ? prediction.assumptions || [] : [];
+    return `<section class="prediction"><div class="section-head"><h3>Predikcia</h3><div class="prediction-controls"><input type="date" aria-label="Dátum predikcie" data-prediction-date value="${esc(this._predictionDate)}"><select aria-label="Rozsah predikcie" data-prediction-days>${[2, 7].map((days) => `<option value="${days}" ${days === this._predictionDays ? "selected" : ""}>${days === 2 ? "24 hodín a zajtra" : "7 dní"}</option>`).join("")}</select><button class="quiet-btn" data-refresh-prediction aria-label="Obnoviť predikciu">Obnoviť</button></div></div>${this._predictionError ? `<p class="error" role="alert">${esc(this._predictionError)}</p>` : !current ? '<p class="muted">Počítam scenár z nastavení a slnečnej geometrie…</p>' : events.length ? `<div class="prediction-list">${events.map((event) => `<button class="event-item" data-prediction-event="${esc(event.id)}"><span class="event-time">${event.at ? clock(event.at) : event.earliest && event.latest ? `${clock(event.earliest)}–${clock(event.latest)}` : "Podľa podmienok"}</span><span>${esc(event.reason)}<small>${esc(event.target)} % · ${esc(predictionNames[event.status] || event.status)}${event.blocked_by ? ` · ${esc(inhibits[event.blocked_by] || event.blocked_by)}` : ""}</small></span><span class="event-badge">${esc(event.type)}</span></button>`).join("")}</div>` : '<p class="muted">Pre tento dátum nevychádza žiadna zmena cieľa podľa nastavených pravidiel.</p>'}${assumptions.length ? `<details class="prediction-assumptions"><summary>Predpoklady scenára (${assumptions.length})</summary><ul>${assumptions.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></details>` : ""}<small class="muted">Predikcia je scenár podľa uložených pravidiel; neovláda žalúziu a nie je potvrdeným budúcim pohybom.</small></section>`;
   }
   _field(f, cfg) {
     const value = cfg[f.key],
@@ -361,6 +426,30 @@ export class CCAZaluziePanel extends HTMLElement {
     }
   }
   _input(event) {
+    if (
+      event.type === "change" &&
+      event.target.hasAttribute("data-simulation-filter")
+    ) {
+      this._simulationFilter = event.target.value;
+      this._render();
+      return;
+    }
+    if (
+      ["input", "change"].includes(event.type) &&
+      event.target.hasAttribute("data-prediction-date")
+    ) {
+      this._predictionDate = event.target.value;
+      this._queuePrediction(this._selected);
+      return;
+    }
+    if (
+      ["input", "change"].includes(event.type) &&
+      event.target.hasAttribute("data-prediction-days")
+    ) {
+      this._predictionDays = Number(event.target.value);
+      this._queuePrediction(this._selected);
+      return;
+    }
     if (event.target.dataset?.history) {
       this._historyHours = Number(event.target.value);
       this._render();
@@ -404,6 +493,11 @@ export class CCAZaluziePanel extends HTMLElement {
       this._selected = button.dataset.cover;
       this._error = "";
       this._render();
+      this._loadPrediction(this._selected);
+      return;
+    }
+    if (button.hasAttribute("data-refresh-prediction")) {
+      this._loadPrediction(this._selected);
       return;
     }
     if (button.dataset.view) {
@@ -428,6 +522,22 @@ export class CCAZaluziePanel extends HTMLElement {
         const dialog = this.shadowRoot.querySelector("dialog");
         dialog.querySelector("pre").textContent = JSON.stringify(
           { udalosť: eventNames[e.type] || e.type, čas: e.at, ...e.details },
+          null,
+          2,
+        );
+        dialog.showModal();
+      }
+      return;
+    }
+    if (button.dataset.predictionEvent) {
+      const event = this._predictions
+        .get(this._selected)
+        ?.events.find((item) => item.id === button.dataset.predictionEvent);
+      if (event) {
+        const dialog = this.shadowRoot.querySelector("dialog");
+        dialog.querySelector("h2").textContent = "Detail predikcie · scenár";
+        dialog.querySelector("pre").textContent = JSON.stringify(
+          event,
           null,
           2,
         );
@@ -468,6 +578,7 @@ export class CCAZaluziePanel extends HTMLElement {
           c.name = c.config.name;
         }
         this._notice = "Nastavenia uložené v Home Assistante.";
+        this._loadPrediction(selected);
       } catch (e) {
         this._error = e.message || String(e);
       } finally {
@@ -495,6 +606,37 @@ export class CCAZaluziePanel extends HTMLElement {
         this._render();
       }
     }
+  }
+  async _loadPrediction(entryId) {
+    if (!entryId || !this._hass) return;
+    const token = (this._predictionRequestToken || 0) + 1;
+    this._predictionRequestToken = token;
+    const startDate = this._predictionDate,
+      days = this._predictionDays;
+    this._predictionError = "";
+    try {
+      const result = await this._hass.callWS({
+        type: "cca_zaluzie/predict",
+        entry_id: entryId,
+        start_date: startDate,
+        days,
+      });
+      if (!result || !Array.isArray(result.events))
+        throw Error("Predikciu sa nepodarilo načítať.");
+      if (token !== this._predictionRequestToken) return;
+      this._predictions.set(entryId, result);
+    } catch (error) {
+      if (token !== this._predictionRequestToken) return;
+      this._predictionError = error.message || String(error);
+    }
+    if (entryId === this._selected && this._view === "overview") this._render();
+  }
+  _queuePrediction(entryId) {
+    clearTimeout(this._predictionTimer);
+    this._predictionTimer = setTimeout(
+      () => this._loadPrediction(entryId),
+      250,
+    );
   }
   _countdown() {
     for (const el of this.shadowRoot.querySelectorAll("[data-due]")) {

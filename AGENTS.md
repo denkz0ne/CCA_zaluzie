@@ -17,3 +17,9 @@ This repository is a new Home Assistant custom integration project. Model exactl
 - Make automation decisions idempotent, explainable and safe with unavailable/unknown states.
 - Preserve configuration and entity identity across options updates and schema migrations.
 - Keep this repository focused on the integration; record feature decisions and deferred work in docs/issues.
+- Dry-run is per cover and defaults off. Every CCA motor service must pass through the motor gateway;
+  simulated actions/scripts never execute and virtual progress must never be reported as hardware success.
+- Prediction is a read-only scenario over copied runtime/input state. It must not call HA services,
+  execute scripts/actions, or mutate a controller runtime, history, timer, or persisted storage.
+- Label predictions as conditional/estimated when future inputs are unknown and never use a current
+  sensor value as proof of a future value.

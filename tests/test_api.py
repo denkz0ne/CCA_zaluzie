@@ -44,3 +44,43 @@ async def test_missing_controller_returns_visible_error(hass, hass_ws_client, ha
     response = await client.receive_json()
     assert response["success"] is False
     assert response["error"]["code"] == "not_found"
+
+
+async def test_prediction_api_is_read_only_and_returns_selected_range(
+    hass, hass_ws_client, hass_admin_user
+):
+    class Controller:
+        async def async_predict(self, start_date, days):
+            return {"start_date": start_date, "days": days, "events": []}
+
+    hass.data[DOMAIN]["controllers"]["entry"] = Controller()
+    client = await hass_ws_client(hass)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "cca_zaluzie/predict",
+            "entry_id": "entry",
+            "start_date": "2026-10-20",
+            "days": 3,
+        }
+    )
+    response = await client.receive_json()
+
+    assert response["success"] is True
+    assert response["result"] == {"start_date": "2026-10-20", "days": 3, "events": []}
+
+
+async def test_nonadmin_cannot_request_prediction(hass, hass_ws_client, hass_read_only_access_token):
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "cca_zaluzie/predict",
+            "entry_id": "anything",
+            "start_date": "2026-10-20",
+        }
+    )
+    response = await client.receive_json()
+
+    assert response["success"] is False
+    assert response["error"]["code"] == "unauthorized"

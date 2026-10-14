@@ -25,7 +25,7 @@
       window.calls = [];
       const hass = {
         states: Object.fromEntries(
-          fixture.controllers.map((c) => [
+          window.fixture.controllers.map((c) => [
             c.cover_entity,
             {
               state: "open",
@@ -38,8 +38,16 @@
         ),
         callWS: async (msg) => {
           window.calls.push(structuredClone(msg));
-          if (msg.type === "cca_zaluzie/list") return structuredClone(fixture);
-          const c = fixture.controllers.find(
+          if (msg.type === "cca_zaluzie/list")
+            return structuredClone(window.fixture);
+          if (msg.type === "cca_zaluzie/predict")
+            return {
+              start_date: msg.start_date,
+              days: msg.days,
+              computed_at: new Date().toISOString(),
+              events: [],
+            };
+          const c = window.fixture.controllers.find(
             (c) => c.entry_id === msg.entry_id,
           );
           if (msg.type === "cca_zaluzie/configure") {

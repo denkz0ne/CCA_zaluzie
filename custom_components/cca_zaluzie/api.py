@@ -112,6 +112,25 @@ async def ws_configure(hass, connection, msg):
             connection.send_error(msg["id"], "invalid_config", str(error))
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cca_zaluzie/predict",
+        vol.Required("entry_id"): str,
+        vol.Required("start_date"): str,
+        vol.Optional("days", default=2): vol.All(vol.Coerce(int), vol.Range(min=1, max=7)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_predict(hass, connection, msg):
+    if controller := _get(hass, connection, msg):
+        try:
+            result = await controller.async_predict(msg["start_date"], msg["days"])
+            connection.send_result(msg["id"], result)
+        except Exception as error:
+            connection.send_error(msg["id"], "prediction_failed", str(error))
+
+
 @websocket_api.websocket_command({vol.Required("type"): "cca_zaluzie/subscribe"})
 @websocket_api.require_admin
 @callback
@@ -133,7 +152,7 @@ def ws_subscribe(hass, connection, msg):
 
 @callback
 def async_register_commands(hass):
-    for handler in (ws_list, ws_get, ws_control, ws_configure, ws_subscribe):
+    for handler in (ws_list, ws_get, ws_control, ws_configure, ws_predict, ws_subscribe):
         websocket_api.async_register_command(hass, handler)
 
 

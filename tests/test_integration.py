@@ -1,5 +1,8 @@
 """Real HA config entries, service calls and controller lifecycle."""
 
+import asyncio
+from copy import deepcopy
+
 import pytest
 
 pytest.importorskip("homeassistant")
@@ -11,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.cca_zaluzie.config import validate_config
 from custom_components.cca_zaluzie.const import DOMAIN
+from custom_components.cca_zaluzie.operations import OperationError
 
 
 @pytest.fixture(autouse=True)
@@ -404,6 +408,51 @@ async def test_simulation_records_motor_command_without_calling_cover_service(ha
     assert any(event["type"] == "would_dispatch" for event in controller.simulation_history)
 
 
+async def test_simulated_motion_advances_only_the_virtual_position(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+
+    await controller.async_set_simulation(True)
+    controller.simulation_shadow["position"] = 100
+    await controller.service("close_cover", {})
+    assert controller.observe_simulation()[1] == 100
+    with pytest.raises(OperationError, match="simulovaný pohyb"):
+        await controller.async_set_simulation(False)
+    assert calls == []
+
+    await controller.sleep(controller.config["drive_time"] / 2)
+    position = controller.observe_simulation()[1]
+
+    assert 45 <= position <= 55
+    assert hass.states.get("cover.blind").attributes["current_position"] == 100
+    assert calls == []
+
+
+async def test_simulated_stop_and_cancelled_reset_never_call_motor(hass, entry, monkeypatch):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    await controller.async_set_simulation(True)
+    await controller.async_control("stop")
+
+    entered_wait = asyncio.Event()
+    release_wait = asyncio.Event()
+    original_sleep = controller.sleep
+
+    async def blocked_sleep(seconds):
+        entered_wait.set()
+        await release_wait.wait()
+        await original_sleep(seconds)
+
+    monkeypatch.setattr(controller, "sleep", blocked_sleep)
+    await controller.async_control("reset")
+    await entered_wait.wait()
+    await controller.operations.cancel_reset()
+
+    assert calls == []
+    assert controller.runtime.reset["status"] == "cancelled"
+    assert any(event["type"] == "would_dispatch" for event in controller.simulation_history)
+
+
 async def test_simulation_suppresses_native_actions(hass, entry):
     config_entry, calls = entry
     controller = config_entry.runtime_data
@@ -420,6 +469,38 @@ async def test_simulation_suppresses_native_actions(hass, entry):
     assert any(
         event["type"] == "action_suppressed" for event in controller.simulation_history
     )
+
+
+async def test_simulation_isolated_to_one_cover(hass, entry):
+    first_entry, calls = entry
+    hass.states.async_set(
+        "cover.other", "open", {"current_position": 100, "supported_features": 15}
+    )
+    second_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Other blind",
+        unique_id="cover.other",
+        data=validate_config(
+            {
+                "cover_entity": "cover.other",
+                "name": "Other blind",
+                "morning_enabled": False,
+                "evening_enabled": False,
+            }
+        ),
+    )
+    second_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(second_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await first_entry.runtime_data.async_set_simulation(True)
+    assert second_entry.runtime_data.snapshot()["simulation"]["enabled"] is False
+    await second_entry.runtime_data.async_control("close")
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == "cover.other"
+    await hass.config_entries.async_unload(second_entry.entry_id)
 
 
 async def test_simulation_mode_is_saved_for_restart(hass, entry):
@@ -441,6 +522,7 @@ async def test_simulated_reset_never_calls_motor_and_is_not_hardware_success(has
 
     await controller.async_set_simulation(True)
     await controller.async_control("reset")
+    await controller.operations.reset_task
     await hass.async_block_till_done()
 
     assert calls == []
@@ -448,6 +530,18 @@ async def test_simulated_reset_never_calls_motor_and_is_not_hardware_success(has
     assert any(
         event["type"] == "simulated_reset_completed" for event in controller.simulation_history
     )
+
+
+async def test_simulation_keeps_unavailable_cover_blocked(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    await controller.async_set_simulation(True)
+    hass.states.async_set("cover.blind", "unavailable")
+
+    with pytest.raises(OperationError, match="nie je dostupná"):
+        await controller.async_control("close")
+
+    assert calls == []
 
 
 async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
@@ -462,3 +556,25 @@ async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
 
     assert calls == []
     assert controller.snapshot()["simulation"]["enabled"] is False
+
+
+async def test_prediction_has_no_ha_side_effects(hass, entry, monkeypatch):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    before_runtime = deepcopy(controller.runtime.to_dict())
+    before_history = deepcopy(controller.history)
+    service_calls = []
+    original_call = hass.services.async_call
+
+    async def count_service(*args, **kwargs):
+        service_calls.append((args, kwargs))
+        return await original_call(*args, **kwargs)
+
+    monkeypatch.setattr(hass.services, "async_call", count_service)
+    result = await controller.async_predict("2026-10-20", 1)
+
+    assert result["start_date"] == "2026-10-20"
+    assert service_calls == []
+    assert calls == []
+    assert controller.runtime.to_dict() == before_runtime
+    assert controller.history == before_history
