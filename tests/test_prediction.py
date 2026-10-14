@@ -93,7 +93,11 @@ def test_prediction_uses_only_the_matching_future_weather_forecast():
         entities={"cover.prediction": Reading("closed", {"current_position": 0})},
         future_forecasts={
             "weather.prediction": [
-                {"datetime": "2026-10-20T00:00:00+02:00", "temperature": 30}
+                {
+                    "datetime": "2026-10-20T00:00:00+02:00",
+                    "temperature": 30,
+                    "condition": "sunny",
+                }
             ]
         },
     )

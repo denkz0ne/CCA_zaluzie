@@ -555,9 +555,7 @@ async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
     await controller.async_control("close")
     with pytest.raises(OperationError, match="simulovaný pohyb"):
         await controller.async_set_simulation(False)
-    await controller.sleep(controller.config["drive_time"])
-    if controller.operations.motion_task:
-        await controller.operations.motion_task
+    await controller.async_control("stop")
     await controller.async_set_simulation(False)
     await hass.async_block_till_done()
 

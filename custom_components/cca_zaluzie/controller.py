@@ -135,7 +135,7 @@ class CoverController:
         shadow = self.simulation_shadow
         if shadow and shadow.get("motion"):
             motion = shadow["motion"]
-            elapsed = max(0.0, self.now() - motion["started"])
+            elapsed = max(0.0, self.monotonic() - motion["started"])
             progress = min(1.0, elapsed / motion["duration"])
             shadow["position"] = motion["from"] + (
                 motion["target"] - motion["from"]
@@ -185,7 +185,7 @@ class CoverController:
                         "service": service,
                         "from": current_position if current_position is not None else target,
                         "target": target,
-                        "started": self.now(),
+                        "started": self.monotonic(),
                         "duration": duration,
                     }
             elif service == "stop_cover":
