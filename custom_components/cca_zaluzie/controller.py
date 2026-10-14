@@ -86,7 +86,9 @@ class CoverController:
         return dt_util.utcnow().timestamp() + self._simulation_elapsed
 
     def monotonic(self) -> float:
-        return asyncio.get_running_loop().time() + self._simulation_elapsed
+        if self.simulation_enabled:
+            return self._simulation_elapsed
+        return asyncio.get_running_loop().time()
 
     async def sleep(self, seconds: float) -> None:
         if self.simulation_enabled:
