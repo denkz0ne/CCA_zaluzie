@@ -32,6 +32,10 @@ class MotorOperations:
     def _clock(self) -> float:
         return self.port.monotonic() if hasattr(self.port, "monotonic") else self.port.now()
 
+    def _observe(self) -> tuple[bool, float | None]:
+        simulated = getattr(self.port, "observe_simulation", None)
+        return simulated() if simulated else self.port.observe()
+
     @property
     def resetting(self) -> bool:
         return bool(
@@ -61,7 +65,7 @@ class MotorOperations:
         async with self.lock:
             if self.resetting:
                 raise OperationError("Prebieha reset polohy")
-            available, position = self.port.observe()
+            available, position = self._observe()
             if not available:
                 raise OperationError("Žalúzia nie je dostupná")
             if position is None and self.config["position_source"] != "drive_time" and not force:
@@ -139,22 +143,37 @@ class MotorOperations:
                     finally:
                         await self.port.service("stop_cover", {})
                     self.runtime.estimated_position = target
-                    command.update(status="estimated", ended=self.port.now())
-                    await self.port.record("command_estimated", command.copy())
+                    simulated = bool(getattr(self.port, "simulation_enabled", False))
+                    command.update(
+                        status="simulated_estimated" if simulated else "estimated",
+                        ended=self.port.now(),
+                    )
+                    await self.port.record(
+                        "simulated_command_completed" if simulated else "command_estimated",
+                        command.copy(),
+                    )
                 else:
                     await self.port.service(service, data)
-                    _, observed = self.port.observe()
+                    _, observed = self._observe()
                     if command["status"] == "requested":
                         if (
                             observed is not None
                             and abs(observed - target) <= self.config["position_tolerance"]
                         ):
+                            simulated = bool(getattr(self.port, "simulation_enabled", False))
                             command.update(
-                                status="completed", observed=observed, ended=self.port.now()
+                                status="simulated_completed" if simulated else "completed",
+                                observed=observed,
+                                ended=self.port.now(),
                             )
                         else:
                             command["status"] = "moving"
-                    await self.port.record("command_sent", command.copy())
+                    event = (
+                        "simulated_command_completed"
+                        if command["status"] == "simulated_completed"
+                        else "command_sent"
+                    )
+                    await self.port.record(event, command.copy())
             except asyncio.CancelledError:
                 command.update(status="interrupted", ended=self.port.now())
                 self.runtime.estimated_position = None
@@ -190,9 +209,9 @@ class MotorOperations:
     async def start_reset(self) -> None:
         if self.resetting or self.lock.locked():
             raise OperationError("Žalúzia už vykonáva inú operáciu")
-        if not self.port.observe()[0]:
+        if not self._observe()[0]:
             raise OperationError("Žalúzia nie je dostupná")
-        if self.config["position_source"] != "drive_time" and self.port.observe()[1] is None:
+        if self.config["position_source"] != "drive_time" and self._observe()[1] is None:
             raise OperationError("Spätná väzba polohy nie je dostupná")
         self.reset_due_monotonic = None
         self.runtime.reset = {"status": "closing", "started": self.port.now(), "due": None}
@@ -220,7 +239,7 @@ class MotorOperations:
                     await self._wait_available(self.config["drive_time"])
                 else:
                     while True:
-                        available, position = self.port.observe()
+                        available, position = self._observe()
                         if not available:
                             raise OperationError("Žalúzia sa stala nedostupnou")
                         # Close service follows HA semantics (fully closed = 0), even for an awning.
@@ -235,18 +254,25 @@ class MotorOperations:
                 await self._wait_available(max(0, self.reset_due_monotonic - self._clock()))
                 reset["status"] = "stopping"
                 await self.port.service("stop_cover", {})
-                available, position = self.port.observe()
+                available, position = self._observe()
                 if not available or (
                     self.config["position_source"] != "drive_time" and position != 0
                 ):
                     raise OperationError("Dokončenie resetu sa nepotvrdilo")
                 await self.port.record("reset_stopping", reset.copy())
-                reset.update(status="completed", ended=self.port.now())
+                simulated = bool(getattr(self.port, "simulation_enabled", False))
+                reset.update(
+                    status="simulated_completed" if simulated else "completed",
+                    ended=self.port.now(),
+                )
                 self.runtime.estimated_position = 0
                 self.runtime.fault = None
                 if self.runtime.command:
                     self.runtime.command["status"] = "cancelled"
-                await self.port.record("reset_completed", reset.copy())
+                await self.port.record(
+                    "simulated_reset_completed" if simulated else "reset_completed",
+                    reset.copy(),
+                )
             except asyncio.CancelledError:
                 stop_error = await self._safe_stop()
                 reset.update(
@@ -270,7 +296,7 @@ class MotorOperations:
     async def _wait_available(self, seconds: float) -> None:
         due = self._clock() + seconds
         while self._clock() < due:
-            available, position = self.port.observe()
+            available, position = self._observe()
             if not available:
                 raise OperationError("Žalúzia sa stala nedostupnou")
             if (
@@ -281,7 +307,7 @@ class MotorOperations:
             ):
                 raise OperationError("Spodný doraz sa počas resetu prestal potvrdzovať")
             await self.port.sleep(min(1, due - self._clock()))
-        if not self.port.observe()[0]:
+        if not self._observe()[0]:
             raise OperationError("Žalúzia sa stala nedostupnou")
 
     async def cancel_reset(self, *, reason: str | None = None) -> None:

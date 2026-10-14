@@ -48,6 +48,8 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
                         "reconcile",
                         "reset",
                         "cancel_reset",
+                        "simulation_on",
+                        "simulation_off",
                     ]
                 ),
                 vol.Optional("position"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),

@@ -70,6 +70,8 @@ def ws_get(hass, connection, msg):
                 "reconcile",
                 "reset",
                 "cancel_reset",
+                "simulation_on",
+                "simulation_off",
             ]
         ),
         vol.Optional("position"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),

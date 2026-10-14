@@ -389,3 +389,76 @@ async def test_panel_rejects_blank_numeric_config_without_changing_the_entry(
     result = await client.receive_json()
     assert result["success"] is False and result["error"]["code"] == "invalid_config"
     assert config_entry.runtime_data.config["open_position"] == 100
+
+
+async def test_simulation_records_motor_command_without_calling_cover_service(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+
+    await controller.async_set_simulation(True)
+    await controller.async_control("close")
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert controller.snapshot()["simulation"]["enabled"] is True
+    assert any(event["type"] == "would_dispatch" for event in controller.simulation_history)
+
+
+async def test_simulation_suppresses_native_actions(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+
+    class SideEffect:
+        async def async_run(self, *args, **kwargs):
+            calls.append("native action ran")
+
+    controller._scripts["open_before"] = SideEffect()
+    await controller.async_set_simulation(True)
+    await controller._run_script("open_before")
+
+    assert calls == []
+    assert any(
+        event["type"] == "action_suppressed" for event in controller.simulation_history
+    )
+
+
+async def test_simulation_mode_is_saved_for_restart(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+
+    await controller.async_set_simulation(True)
+    await hass.config_entries.async_unload(config_entry.entry_id)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.runtime_data.snapshot()["simulation"]["enabled"] is True
+    assert calls == []
+
+
+async def test_simulated_reset_never_calls_motor_and_is_not_hardware_success(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+
+    await controller.async_set_simulation(True)
+    await controller.async_control("reset")
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert controller.runtime.reset["status"] == "simulated_completed"
+    assert any(
+        event["type"] == "simulated_reset_completed" for event in controller.simulation_history
+    )
+
+
+async def test_disabling_simulation_does_not_dispatch_virtual_work(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.decision.target = 0
+
+    await controller.async_set_simulation(True)
+    await controller.async_control("close")
+    await controller.async_set_simulation(False)
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert controller.snapshot()["simulation"]["enabled"] is False

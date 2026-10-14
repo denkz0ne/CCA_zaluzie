@@ -145,3 +145,30 @@ test("add cover link starts the Home Assistant integration flow", async ({ page 
     "/config/integrations/dashboard/add?domain=cca_zaluzie",
   );
 });
+
+test("dry-run status is conspicuous and can be turned off per cover", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.controllers[0].simulation = {
+      enabled: true,
+      shadow: { position: 42 },
+    };
+    window.publish({ controller: window.fixture.controllers[0] });
+  });
+  await expect(page.getByText("SIMULÁCIA — motor je zablokovaný")).toBeVisible();
+  await expect(page.getByText("Simulovaná poloha: 42 %")).toBeVisible();
+  await page.getByRole("button", { name: "Vypnúť simuláciu", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (call) =>
+            call.type === "cca_zaluzie/control" &&
+            call.action === "simulation_off" &&
+            call.entry_id === "one",
+        ),
+      ),
+    )
+    .toBe(true);
+});

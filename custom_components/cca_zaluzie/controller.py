@@ -34,7 +34,12 @@ from .model import Decision, Reading, Runtime, Snapshot
 from .operations import MotorOperations, OperationError
 
 _LOGGER = logging.getLogger(__name__)
-_TERMINAL_RESET = {"reset_completed", "reset_cancelled", "reset_failed"}
+_TERMINAL_RESET = {
+    "reset_completed",
+    "simulated_reset_completed",
+    "reset_cancelled",
+    "reset_failed",
+}
 _CONTROL_CONTEXT: ContextVar[Context | None] = ContextVar("cca_control_context", default=None)
 
 
@@ -43,6 +48,11 @@ class CoverController:
         self.hass, self.entry = hass, entry
         self.config = validate_config({**entry.data, **entry.options})
         self.runtime = Runtime()
+        self._physical_runtime: Runtime | None = None
+        self.simulation_enabled = False
+        self.simulation_history: list[dict] = []
+        self.simulation_shadow: dict[str, Any] | None = None
+        self._simulation_elapsed = 0.0
         self.history: list[dict] = []
         self.decision = Decision(None, "idle", "idle", "Inicializácia")
         self.operations = MotorOperations(self.config, self.runtime, self)
@@ -69,12 +79,16 @@ class CoverController:
         self._calendar: list = []
 
     def now(self) -> float:
-        return dt_util.utcnow().timestamp()
+        return dt_util.utcnow().timestamp() + self._simulation_elapsed
 
     def monotonic(self) -> float:
-        return asyncio.get_running_loop().time()
+        return asyncio.get_running_loop().time() + self._simulation_elapsed
 
     async def sleep(self, seconds: float) -> None:
+        if self.simulation_enabled:
+            self._simulation_elapsed += max(0, seconds)
+            await asyncio.sleep(0)
+            return
         await asyncio.sleep(seconds)
 
     def observe(self) -> tuple[bool, float | None]:
@@ -100,6 +114,67 @@ class CoverController:
         context = Context(
             parent_id=parent.id if parent else None, user_id=parent.user_id if parent else None
         )
+        await self._dispatch_motor_service(service, data, context)
+
+    def observe_simulation(self) -> tuple[bool, float | None]:
+        available, physical_position = self.observe()
+        if not self.simulation_enabled:
+            return available, physical_position
+        shadow_position = (
+            self.simulation_shadow.get("position") if self.simulation_shadow else None
+        )
+        return available, shadow_position if shadow_position is not None else physical_position
+
+    async def _dispatch_motor_service(
+        self, service: str, data: dict, context: Context
+    ) -> None:
+        if self.simulation_enabled:
+            shadow = self.simulation_shadow
+            if shadow is None:
+                available, position = self.observe()
+                shadow = self.simulation_shadow = {
+                    "position": position,
+                    "available": available,
+                    "calibrated": False,
+                    "motion": None,
+                }
+            target = data.get("position")
+            if target is None and self.runtime.command:
+                target = self.runtime.command.get("target")
+            if target is None and service == "open_cover":
+                target = 100
+            elif target is None and service == "close_cover":
+                target = 0
+            if service == "set_cover_position":
+                shadow["position"] = data.get("position")
+                shadow["calibrated"] = False
+                shadow["motion"] = None
+            elif service in ("open_cover", "close_cover"):
+                shadow["position"] = target
+                shadow["calibrated"] = False
+            elif service == "stop_cover":
+                shadow["motion"] = None
+            if service in ("open_cover", "close_cover"):
+                shadow["motion"] = {
+                    "service": service,
+                    "target": target,
+                    "started": self.now(),
+                    "duration": self.config["drive_time"],
+                }
+            await self.record(
+                "would_dispatch",
+                {
+                    "entity_id": self.config["cover_entity"],
+                    "service": service,
+                    "data": deepcopy(data),
+                    "target": target,
+                    "reason": self.decision.reason,
+                    "simulated_at": self.now(),
+                },
+            )
+            self._notify()
+            return
+
         self.contexts.append(context.id)
         if self.operations.resetting:
             self._reset_contexts.append(context.id)
@@ -126,13 +201,7 @@ class CoverController:
             raise OperationError("Pred časovým odhadom čiastočnej polohy vykonaj reset polohy")
         service = "open_cover" if target > previous else "close_cover"
         duration = abs(target - previous) / 100 * self.config["drive_time"]
-        await self.hass.services.async_call(
-            "cover",
-            service,
-            {"entity_id": self.config["cover_entity"]},
-            blocking=True,
-            context=context,
-        )
+        await self._dispatch_motor_service(service, {}, context)
         try:
             due = self.now() + duration
             while self.now() < due:
@@ -142,13 +211,7 @@ class CoverController:
                     )
                 await self.sleep(min(1, due - self.now()))
         finally:
-            await self.hass.services.async_call(
-                "cover",
-                "stop_cover",
-                {"entity_id": self.config["cover_entity"]},
-                blocking=True,
-                context=context,
-            )
+            await self._dispatch_motor_service("stop_cover", {}, context)
         self.runtime.estimated_position = target
 
     def _spawn(self, coro, *, background: bool = False) -> asyncio.Task:
@@ -161,11 +224,79 @@ class CoverController:
         task.add_done_callback(self._tasks.discard)
         return task
 
+    async def async_set_simulation(self, enabled: bool) -> None:
+        """Switch this cover between physical control and isolated dry-run state."""
+        if enabled == self.simulation_enabled:
+            return
+        if enabled and (
+            self.operations.lock.locked()
+            or self.operations.resetting
+            or (self.runtime.command or {}).get("status") in ("moving", "requested")
+        ):
+            raise OperationError("Počkaj, kým sa pohyb žalúzie dokončí, potom zapni simuláciu")
+
+        task = self._dispatch_task
+        if task and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+        if enabled:
+            self.runtime.pending_dispatch = None
+            self._physical_runtime = self.runtime
+            self.runtime = Runtime.from_dict(deepcopy(self._physical_runtime.to_dict()))
+            available, position = self.observe()
+            self.simulation_shadow = {
+                "position": (
+                    position
+                    if position is not None
+                    else self._physical_runtime.estimated_position
+                ),
+                "available": available,
+                "calibrated": self.config["position_source"] != "drive_time"
+                and position is not None,
+                "motion": None,
+            }
+            self._simulation_elapsed = 0.0
+            self.simulation_enabled = True
+            self.operations.runtime = self.runtime
+            await self.record(
+                "simulation_enabled",
+                {"physical_position": position, "available": available},
+            )
+        else:
+            self.runtime.pending_dispatch = None
+            self.simulation_enabled = False
+            self.runtime = self._physical_runtime or Runtime()
+            self._physical_runtime = None
+            self.operations.runtime = self.runtime
+            self.simulation_shadow = None
+            self._simulation_elapsed = 0.0
+            hold_current(self.runtime, self.decision.target, self.decision.mode, explicit=True)
+            await self.record("simulation_disabled", {"dispatch_suppressed": True})
+        await self._persist()
+        self._notify()
+
     async def async_start(self) -> None:
         saved = await self.store.async_load() or {}
-        self.runtime = Runtime.from_dict(saved.get("runtime", {}))
+        physical_runtime = Runtime.from_dict(saved.get("runtime", {}))
+        simulation = saved.get("simulation", {})
+        self.simulation_enabled = bool(simulation.get("enabled", False))
+        self.simulation_history = saved.get("simulation_history", [])[-1000:]
+        self.simulation_shadow = (
+            saved.get("simulation_shadow") if self.simulation_enabled else None
+        )
+        if self.simulation_enabled:
+            self._physical_runtime = physical_runtime
+            self.runtime = Runtime.from_dict(
+                saved.get("simulation_runtime") or physical_runtime.to_dict()
+            )
+        else:
+            self.runtime = physical_runtime
         self.history = saved.get("history", [])
         self.runtime.allow_reconcile = self.config["startup_recovery"]
+        if self._physical_runtime is not None:
+            self._physical_runtime.allow_reconcile = False
         if self.runtime.command and self.runtime.command.get("context_id"):
             self.contexts.append(self.runtime.command["context_id"])
         self.operations.runtime = self.runtime
@@ -455,6 +586,16 @@ class CoverController:
     async def _run_script(self, key: str) -> None:
         script = self._scripts.get(key)
         if script:
+            if self.simulation_enabled:
+                await self.record(
+                    "action_suppressed",
+                    {
+                        "action": key,
+                        "would_run": True,
+                        "reason": "Simulácia blokuje používateľské akcie a skripty",
+                    },
+                )
+                return
             context = Context()
             self.contexts.append(context.id)
             await script.async_run(
@@ -535,12 +676,24 @@ class CoverController:
                     "target": target,
                     "action": action,
                     "mode": mode,
-                    "status": "custom_sent",
+                    "status": (
+                        "simulated_custom_action"
+                        if self.simulation_enabled
+                        else "custom_sent"
+                    ),
                     "started": self.now(),
                     "deadline": self.now() + self.config["movement_timeout"],
                     "generation": self.runtime.generation,
                 }
-                await self.record("custom_action_completed", {"target": target, "action": action})
+                await self.record(
+                    "action_suppressed" if self.simulation_enabled else "custom_action_completed",
+                    {
+                        "target": target,
+                        "action": action,
+                        "would_run": self.simulation_enabled,
+                        "reason": "Simulácia blokuje vlastné akcie" if self.simulation_enabled else None,
+                    },
+                )
                 moved = True
             else:
                 moved = await self.operations.command(target)
@@ -580,7 +733,20 @@ class CoverController:
         async with self._persist_lock:
             task = asyncio.create_task(
                 self.store.async_save(
-                    {"runtime": self.runtime.to_dict(), "history": deepcopy(self.history)}
+                    {
+                        "runtime": (
+                            self._physical_runtime.to_dict()
+                            if self._physical_runtime is not None
+                            else self.runtime.to_dict()
+                        ),
+                        "history": deepcopy(self.history),
+                        "simulation": {"enabled": self.simulation_enabled},
+                        "simulation_runtime": (
+                            self.runtime.to_dict() if self.simulation_enabled else None
+                        ),
+                        "simulation_history": deepcopy(self.simulation_history),
+                        "simulation_shadow": deepcopy(self.simulation_shadow),
+                    }
                 )
             )
             try:
@@ -622,7 +788,12 @@ class CoverController:
             "type": event,
             "details": deepcopy(details),
         }
-        self.history.append(record)
+        if self.simulation_enabled:
+            record["simulated"] = True
+            self.simulation_history.append(record)
+            self.simulation_history = self.simulation_history[-int(self.config["history_limit"]):]
+        else:
+            self.history.append(record)
         cutoff = self.now() - self.config["retention_days"] * 86400
         self.history = [
             x for x in self.history if dt_util.parse_datetime(x["at"]).timestamp() >= cutoff
@@ -630,7 +801,7 @@ class CoverController:
         log = _LOGGER.warning if "failed" in event or "interrupted" in event else _LOGGER.debug
         log("%s: %s %s", self.entry.title, event, details)
         await self._persist()
-        if self.config["logbook"] and event != "decision":
+        if self.config["logbook"] and event != "decision" and not self.simulation_enabled:
             self.hass.bus.async_fire(
                 "logbook_entry",
                 {
@@ -685,7 +856,14 @@ class CoverController:
             "config": deepcopy(self.config),
             "decision": decision,
             "runtime": runtime,
-            "events": deepcopy(self.history),
+            "events": sorted(
+                [*deepcopy(self.history), *deepcopy(self.simulation_history)],
+                key=lambda event: event["at"],
+            ),
+            "simulation": {
+                "enabled": self.simulation_enabled,
+                "shadow": deepcopy(self.simulation_shadow),
+            },
             "sensors": {
                 k: {"state": v.state, "attributes": v.attributes}
                 for k, v in self._snapshot_inputs().entities.items()
@@ -728,6 +906,10 @@ class CoverController:
             await self.operations.start_reset()
         elif action == "cancel_reset":
             await self.operations.cancel_reset()
+        elif action == "simulation_on":
+            await self.async_set_simulation(True)
+        elif action == "simulation_off":
+            await self.async_set_simulation(False)
         elif action == "stop":
             await self.operations.stop()
             mark_manual(self.config, self.runtime, self.observe()[1], dt_util.now())
@@ -781,7 +963,8 @@ class CoverController:
             )
         else:
             raise OperationError("Neznámy povel")
-        await self.async_evaluate()
+        if action != "simulation_off":
+            await self.async_evaluate()
 
     async def _manual_motion(self, target) -> None:
         try:
