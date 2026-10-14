@@ -1,3 +1,8 @@
+# 2026.10.3
+
+- Register CCA Žalúzie as a Home Assistant service integration instead of a helper.
+- Fix the side-panel button so it opens the native CCA setup flow.
+
 # 2026.10.2
 
 - Lower the HACS minimum Home Assistant version to 2026.9.0.
