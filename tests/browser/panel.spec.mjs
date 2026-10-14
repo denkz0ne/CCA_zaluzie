@@ -138,3 +138,10 @@ test("mobile layout keeps controls and fields reachable", async ({ page }) => {
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
 });
+
+test("add cover link starts the Home Assistant integration flow", async ({ page }) => {
+  await expect(page.getByRole("link", { name: "＋ Pridať žalúziu" })).toHaveAttribute(
+    "href",
+    "/config/integrations/dashboard/add?domain=cca_zaluzie",
+  );
+});
