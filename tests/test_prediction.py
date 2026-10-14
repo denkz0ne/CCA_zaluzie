@@ -172,6 +172,7 @@ def test_prediction_keeps_unavailable_cover_uncertain():
     )
 
     opening = next(event for event in result["events"] if event["type"] == "open")
-    assert opening["status"] == "conditional"
+    assert opening["status"] == "blocked"
+    assert opening["blocked_by"] == "unavailable"
     assert opening["at"] is None
     assert any("cover.prediction" in item for item in opening["assumptions"])
