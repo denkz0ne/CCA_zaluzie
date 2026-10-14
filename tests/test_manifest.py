@@ -1,9 +1,7 @@
 """Home Assistant manifest identity and discovery behavior."""
 
-from pathlib import Path
-
 import json
-
+from pathlib import Path
 
 MANIFEST = (
     Path(__file__).parents[1]
