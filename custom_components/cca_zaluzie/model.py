@@ -51,6 +51,7 @@ class Snapshot:
     calendar_events: list[dict] = field(default_factory=list)
     gates: dict[str, Any] = field(default_factory=dict)
     forecast_conditions: dict[str, str | None] = field(default_factory=dict)
+    future_forecasts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def get(self, entity: str) -> Reading:
         return self.entities.get(entity, Reading("unknown"))

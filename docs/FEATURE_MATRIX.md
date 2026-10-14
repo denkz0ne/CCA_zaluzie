@@ -1,4 +1,4 @@
-# Feature mapping — 2026.10.0
+# Feature mapping — 2026.11.0
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -24,6 +24,9 @@ with Home Assistant's vertical position convention at the service boundary.
 | Configuration/history persistence and migration | Implemented | HA storage and options reload retain identity/history; HA tests |
 | Live sidebar controls, per-cover drafts and settings | Implemented | Production JS/CSS with admin WebSocket API; browser and HA API tests |
 | Timeline, pending/next event, decision inputs, debug and diagnostics | Implemented | Bounded history, inspectable event details, sanitized diagnostics; browser/HA tests |
+| Full integration discovery and Add flow | Implemented | `integration_type: service`; native dashboard Add route; manifest and browser regression tests |
+| Per-cover dry-run without motor calls | Implemented | Persistent isolated simulation runtime, single motor dispatch gateway, timed shadow position, suppressed native actions and visible panel state; HA and browser tests |
+| Read-only date prediction | Implemented | Production engine on copied state, local date/DST solar geometry, provider forecasts, certainty and assumptions; API and browser tests |
 | Blueprint input_text helper and automation traces | Replaced | Integration-owned storage and structured event/condition history |
 | Lamella actuator tilt, tilt bands/waits/reposition | Excluded by user | No tilt service or tilt target is sent; tilted-window contact remains supported |
 
@@ -38,5 +41,5 @@ and end-stop behavior must be checked after installation before enabling automat
 
 ## Proposals awaiting discussion
 
-Copying settings between covers and a no-movement evaluation mode are proposals
-for a later version. They are not included in this release.
+Copying settings between covers remains a proposal for a later version. It is not
+included in this release.

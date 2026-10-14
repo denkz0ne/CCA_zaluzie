@@ -2,6 +2,12 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/tests/browser/demo.html");
+  await page.waitForFunction(
+    () =>
+      Array.isArray(window.fixture?.controllers) &&
+      Array.isArray(window.calls) &&
+      typeof window.publish === "function",
+  );
 });
 
 test("history period is selectable", async ({ page }) => {
@@ -137,4 +143,79 @@ test("mobile layout keeps controls and fields reachable", async ({ page }) => {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+});
+
+test("add cover link starts the Home Assistant integration flow", async ({
+  page,
+}) => {
+  await expect(
+    page.getByRole("link", { name: "＋ Pridať žalúziu" }),
+  ).toHaveAttribute(
+    "href",
+    "/config/integrations/dashboard/add?domain=cca_zaluzie",
+  );
+});
+
+test("dry-run status is conspicuous and can be turned off per cover", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.controllers[0].simulation = {
+      enabled: true,
+      shadow: { position: 42 },
+    };
+    window.fixture.controllers[0].events.push({
+      id: "simulated-command",
+      at: new Date().toISOString(),
+      type: "would_dispatch",
+      simulated: true,
+      details: { target: 42 },
+    });
+    window.publish({ controller: window.fixture.controllers[0] });
+  });
+  await expect(
+    page.getByText("SIMULÁCIA — motor je zablokovaný"),
+  ).toBeVisible();
+  await expect(page.getByText("Simulovaná poloha: 42 %")).toBeVisible();
+  await page.getByLabel("Filtrovať simuláciu").selectOption("would_dispatch");
+  await expect(
+    page.getByText("Simulácia: motorový povel by sa odoslal"),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Vypnúť simuláciu", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (call) =>
+            call.type === "cca_zaluzie/control" &&
+            call.action === "simulation_off" &&
+            call.entry_id === "one",
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
+test("prediction can be requested for a selected future date and week", async ({
+  page,
+}) => {
+  await page.getByLabel("Dátum predikcie").fill("2026-10-22");
+  await page.getByLabel("Rozsah predikcie").selectOption("7");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (call) =>
+            call.type === "cca_zaluzie/predict" &&
+            call.start_date === "2026-10-22" &&
+            call.days === 7,
+        ),
+      ),
+    )
+    .toBe(true);
+  await expect(
+    page.getByText("Predikcia je scenár podľa uložených pravidiel"),
+  ).toBeVisible();
 });

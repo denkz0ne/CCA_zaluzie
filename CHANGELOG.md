@@ -1,3 +1,17 @@
+# 2026.11.0
+
+- Register the integration as a full Home Assistant service integration and repair the Add-cover flow.
+- Add persistent per-cover dry-run with a guarded motor-service gateway, isolated virtual position,
+  suppressed native actions, trace filters, and explicit simulated operation results.
+- Add a read-only date-based prediction using the production decision engine, solar geometry,
+  valid provider forecasts, and explicit conditional/estimated confidence.
+- Preserve the Home Assistant 2026.9.0 minimum version.
+
+# 2026.10.3
+
+- Register CCA Žalúzie as a Home Assistant service integration instead of a helper.
+- Fix the side-panel button so it opens the native CCA setup flow.
+
 # 2026.10.2
 
 - Lower the HACS minimum Home Assistant version to 2026.9.0.

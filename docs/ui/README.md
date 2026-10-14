@@ -8,7 +8,7 @@ The current visual reference is [CCA_zaluzie_UI.html](CCA_zaluzie_UI.html). Down
 - Keep the left automation list visible in both Overview and Configuration.
 - Selecting a different cover changes the selected automation's context, including configuration.
 - Use compact controls consistent with Entity Controller: time windows, switches, clickable section navigation, and grouped settings.
-- Use clear Slovak labels such as “Ručný režim”, “Vynútené ovládanie”, “Vetranie” and “Záznamy”; avoid unexplained technical terms.
+- Use clear Slovak labels such as â€śRuÄŤnĂ˝ reĹľimâ€ť, â€śVynĂştenĂ© ovlĂˇdanieâ€ť, â€śVetranieâ€ť and â€śZĂˇznamyâ€ť; avoid unexplained technical terms.
 - Put short contextual help behind question-mark tooltips, available on hover and keyboard focus.
 - Show the actions blocked by manual mode as individual checkboxes.
 - Enable or disable dependent settings according to the feature switch and show their relationship clearly.
@@ -23,3 +23,17 @@ The current visual reference is [CCA_zaluzie_UI.html](CCA_zaluzie_UI.html). Down
 Treat this file as a visual and interaction reference alongside [INTEGRATION_BRIEF.md](../INTEGRATION_BRIEF.md) and [CCA_REFERENCE.md](../CCA_REFERENCE.md). The prototype's example values, event records and simplified controls are illustrative. They do not supersede CCA's full applicable behavior or establish a complete production configuration schema. Preserve all required condition layers, priorities, diagnostics and state handling during implementation.
 
 Snapshot saved to GitHub: 2026-10-11. Source: latest Library version 1, complete 141-line HTML file.
+# Overview additions in 2026.11.0
+
+The selected cover overview includes two independent status areas:
+
+- **SimulĂˇcia (dry-run)** is a per-cover motor safety mode. It is off by default, persists across
+  Home Assistant reloads, labels virtual events, and suppresses configured native actions/scripts.
+  Its virtual position is separate from the physical cover reading. Turning it off does not replay
+  simulated commands. Simulation events can be filtered by decisions, timers, planned motor calls,
+  blocks, or errors.
+- **Predikcia** accepts a local calendar date and a 2-day or 7-day horizon. It reports computed,
+  estimated, or conditional scenarios and exposes assumptions/reasons in the event detail. It does
+  not issue commands. Refresh it after changing upstream sensor or weather data.
+
+The Add-cover link opens Home Assistant's native integration setup flow for `cca_zaluzie`.
