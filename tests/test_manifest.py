@@ -1,7 +1,8 @@
 """Home Assistant manifest identity and discovery behavior."""
 
-import json
 from pathlib import Path
+
+import json
 
 
 MANIFEST = (
