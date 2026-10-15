@@ -19,7 +19,7 @@ The original visual reference is [CCA_zaluzie_UI.html](CCA_zaluzie_UI.html). Dow
 - Keep the left automation list visible in both Overview and Configuration.
 - Selecting a different cover changes the selected automation's context, including configuration.
 - Use compact controls consistent with Entity Controller: time windows, switches, clickable section navigation, and grouped settings.
-- Use clear Slovak labels such as â€śRuÄŤnĂ˝ reĹľimâ€ť, â€śVynĂştenĂ© ovlĂˇdanieâ€ť, â€śVetranieâ€ť and â€śZĂˇznamyâ€ť; avoid unexplained technical terms.
+- Use clear Slovak labels such as „Manuálne ovládanie“, „Vynútené ovládanie“, „Vetranie“ and „Záznamy“; avoid unexplained technical terms.
 - Put short contextual help behind question-mark tooltips, available on hover and keyboard focus.
 - Show the actions blocked by manual mode as individual checkboxes.
 - Enable or disable dependent settings according to the feature switch and show their relationship clearly.

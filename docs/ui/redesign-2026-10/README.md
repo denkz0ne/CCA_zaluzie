@@ -1,6 +1,9 @@
 # Návrh kompletného redizajnu CCA Žalúzie
 
-**Stav: návrh na posúdenie, bez úpravy produkčnej integrácie.** 15. október 2026.
+**Stav: schválený návrh implementovaný v produkčnom paneli pre 2026.12.0.**
+Pôvodný návrh: 15. október 2026. Implementácia a overenie: 16. október 2026.
+Aktuálne ovládanie opisuje [návod k panelu](../../PANEL.md).
+Nižšie zostáva zachované pôvodné zadanie a jeho východiskový audit.
 Východisko: verzia 2026.11.1, commit `0e5f2ccc40edb7bf4abff6ef1cf66d18b2665247`.
 
 [Otvoriť samostatný interaktívny HTML mockup](CCA_zaluzie_redesign.html) ·
