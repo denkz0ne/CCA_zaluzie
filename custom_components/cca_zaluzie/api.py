@@ -199,7 +199,14 @@ async def ws_configure_bulk(hass, connection, msg):
                 lambda cfg: async_validate_native(hass, cfg),
                 lambda key, cfg: _save(hass, key, cfg),
             )
-            connection.send_result(msg["id"], {"saved": True, "configs": configs})
+            connection.send_result(
+                msg["id"],
+                {
+                    "saved": True,
+                    "configs": configs,
+                    "config_revisions": {key: config_revision(cfg) for key, cfg in configs.items()},
+                },
+            )
         except Exception as error:
             connection.send_error(msg["id"], "invalid_config", str(error))
 

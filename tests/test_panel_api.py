@@ -81,6 +81,9 @@ async def test_bulk_success_preserves_identity_and_rejects_immediate_stale_save(
     assert result["success"] is True
     assert result["result"]["configs"]["a"]["cover_entity"] == "cover.a"
     assert result["result"]["configs"]["b"]["cover_entity"] == "cover.b"
+    assert result["result"]["config_revisions"] == {
+        key: config_revision(cfg) for key, cfg in result["result"]["configs"].items()
+    }
     await client.send_json({**request, "id": 2, "patch": {"debug": False}})
     result = await client.receive_json()
     assert result["success"] is False
