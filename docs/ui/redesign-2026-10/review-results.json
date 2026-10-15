@@ -1,0 +1,14 @@
+{
+  "fields": 162,
+  "missing": [],
+  "checks": [
+    "all 162 real settings represented",
+    "named next action and manual-return behavior",
+    "searchable entity picker",
+    "isolated per-cover drafts",
+    "selection stable on state update",
+    "toast hidden after 4 seconds",
+    "desktop, dark and 390px mobile renders"
+  ],
+  "pageErrors": []
+}

@@ -1,5 +1,15 @@
 # Latest UI design
 
+## Proposed redesign — 15 October 2026
+
+The new design proposal is available as a [self-contained interactive HTML mockup](redesign-2026-10/CCA_zaluzie_redesign.html)
+with a [complete design and acceptance criteria](redesign-2026-10/README.md).
+Preview the [overview](redesign-2026-10/overview.png), [schedule](redesign-2026-10/schedule.png)
+and [mobile layout](redesign-2026-10/mobile.png). This is a proposal for review;
+it has not changed the installed integration or replaced the accepted reference below.
+
+## Existing reference
+
 The current visual reference is [CCA_zaluzie_UI.html](CCA_zaluzie_UI.html). Download the file and open it in a browser. It is a self-contained interactive prototype; its controls simulate behavior and do not connect to Home Assistant.
 
 ## Confirmed layout requirements
