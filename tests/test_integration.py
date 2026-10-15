@@ -99,6 +99,9 @@ async def test_invalid_schedule_stays_in_flow(hass):
         data={"cover_entity": "cover.blind", "name": "Blind", "cover_type": "blind"},
     )
     result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"position_source": "current_position"}
+    )
+    result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"morning_early": "10:00", "morning_late": "08:00"}
     )
     assert result["type"] == FlowResultType.FORM and result["errors"]
@@ -115,6 +118,18 @@ async def test_setup_asks_for_manual_source_when_feedback_missing(hass):
         result["flow_id"], {"position_source": "drive_time", "drive_time": 72}
     )
     assert result["step_id"] == "schedule"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "time_enabled": True,
+            "morning_enabled": True,
+            "evening_enabled": True,
+            "morning_early": "06:30",
+            "morning_late": "08:00",
+            "evening_early": "18:00",
+            "evening_late": "21:30",
+        },
+    )
     assert result["data"]["position_source_auto"] is False
     assert result["data"]["position_source"] == "drive_time"
 
@@ -205,6 +220,7 @@ async def test_selected_position_sensor_completes_a_command(hass, entry):
         **config_entry.runtime_data.config,
         "position_source": "sensor",
         "position_sensor": "sensor.feedback",
+        "position_source_auto": False,
     }
     hass.config_entries.async_update_entry(config_entry, options=options)
     await hass.async_block_till_done()
@@ -225,6 +241,7 @@ async def test_unknown_selected_sensor_is_not_replaced_by_cover_position(hass, e
             **config_entry.runtime_data.config,
             "position_source": "sensor",
             "position_sensor": "sensor.feedback",
+            "position_source_auto": False,
         },
     )
     await hass.async_block_till_done()
