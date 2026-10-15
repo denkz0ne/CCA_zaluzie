@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from copy import deepcopy
 from hashlib import sha256
 
@@ -35,9 +36,9 @@ vent_return_delay vent_lower_from_above vent_after_shade vent_keep_full_tilt til
 )
 
 
-def config_revision(config: dict) -> str:
+def config_revision(config: Mapping) -> str:
     """Hash normalized configuration independently of mapping insertion order."""
-    normalized = validate_config(config)
+    normalized = validate_config(dict(config))
     return sha256(
         json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     ).hexdigest()

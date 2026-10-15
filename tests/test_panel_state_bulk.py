@@ -1,6 +1,7 @@
 """Pure regression tests for selective bulk transactions and panel ordering."""
 
 import asyncio
+from types import MappingProxyType
 
 import pytest
 
@@ -36,6 +37,11 @@ def test_bulk_allowlist_excludes_every_physical_identity_and_native_editor():
         & BULK_EDITABLE
     )
     assert {"morning_early_free", "manual_timeout", "shade_start_and", "debug"} <= BULK_EDITABLE
+
+
+def test_revision_accepts_home_assistant_read_only_entry_data():
+    original = config()
+    assert config_revision(MappingProxyType(original)) == config_revision(original)
 
 
 def test_revision_is_normalized_and_mapping_order_independent():

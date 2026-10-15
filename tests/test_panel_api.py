@@ -196,12 +196,16 @@ async def test_sidebar_removed_only_when_final_config_entry_is_deleted(
 
     removed = MagicMock()
     monkeypatch.setattr("homeassistant.components.frontend.async_remove_panel", removed)
-    monkeypatch.setattr(
-        hass.config_entries,
-        "async_entries",
-        lambda domain: [panel["a"]] if last_entry else list(panel.values()),
-    )
     hass.data[DOMAIN]["panel_registered"] = True
-    await async_remove_entry(hass, panel["a"])
+    # The HA fixture also calls async_entries() without a domain during shutdown.
+    # Restore the real manager before fixture teardown, including on assertion failure.
+    with monkeypatch.context() as entries_patch:
+        entries_patch.setattr(
+            hass.config_entries,
+            "async_entries",
+            lambda domain=None: [panel["a"]] if last_entry else list(panel.values()),
+        )
+        await async_remove_entry(hass, panel["a"])
+    await hass.async_block_till_done()
     assert removed.call_count == int(last_entry)
     assert hass.data[DOMAIN]["panel_registered"] is not last_entry
