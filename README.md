@@ -45,6 +45,13 @@ Unknown required inputs do not authorize movement. For devices without position
 feedback, select the calibrated drive-time source; partial timed movement needs
 an end-stop reset first. The UI labels calculated positions as estimates.
 
+By default, CCA automatically selects reliable live position feedback: it prefers
+Home Assistant's `current_position` and falls back to `position`. If both valid
+values conflict beyond the configured tolerance, or neither is available, it
+shows the source selector and blocks movement until a usable source is chosen.
+Custom sensors and calibrated drive time are always explicit choices; estimated
+travel time is never treated as measured position.
+
 **Reset polohy** closes fully, waits for confirmed arrival (or the explicitly
 configured full drive time), dwells exactly **60 seconds**, then sends STOP.
 The reset owns motor dispatch. Cancellation/unload attempts STOP; interruption,

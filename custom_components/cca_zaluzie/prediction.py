@@ -72,13 +72,16 @@ def _assumed_snapshot(
     forecast_estimated = forecast_data is not None
     cover = config["cover_entity"]
     cover_reading = snapshot.get(cover)
-    if config["position_source"] == "drive_time":
+    if config["position_source"] == "position_unavailable":
+        position = None
+        assumptions.append("Automatický zdroj polohy nie je dostupný; pohyb sa nedá potvrdiť.")
+    elif config["position_source"] == "drive_time":
         position = runtime.estimated_position
     elif config["position_source"] == "sensor":
         position = snapshot.get(config["position_sensor"]).number()
     else:
         position = cover_reading.number(config["position_source"])
-    if position is None:
+    if position is None and config["position_source"] != "position_unavailable":
         position = config["close_position"]
         assumptions.append("Počiatočná poloha je scenár; skutočná poloha musí byť dostupná.")
         if config["position_source"] == "drive_time":
@@ -88,12 +91,13 @@ def _assumed_snapshot(
                 str(position), changed_at=moment.timestamp()
             )
     cover_attributes = dict(cover_reading.attributes)
-    cover_attributes["current_position"] = position
-    if config["position_source"] not in ("drive_time", "sensor"):
+    if position is not None:
+        cover_attributes["current_position"] = position
+    if config["position_source"] not in ("drive_time", "sensor", "position_unavailable"):
         cover_attributes[config["position_source"]] = position
     if cover_reading.state in ("unknown", "unavailable"):
         assumptions.append(f"Žalúzia {cover} je teraz nedostupná; budúcu dostupnosť nemožno potvrdiť.")
-    else:
+    elif position is not None:
         snapshot.entities[cover] = Reading(
             "open" if position > config["close_position"] else "closed",
             cover_attributes,
@@ -235,6 +239,8 @@ def _assumed_snapshot(
 
 
 def _position(config: dict[str, Any], snapshot: Snapshot, runtime: Runtime) -> float | None:
+    if config["position_source"] == "position_unavailable":
+        return None
     if config["position_source"] == "drive_time":
         return runtime.estimated_position
     if config["position_source"] == "sensor":
@@ -243,6 +249,8 @@ def _position(config: dict[str, Any], snapshot: Snapshot, runtime: Runtime) -> f
 
 
 def _store_position(config: dict[str, Any], snapshot: Snapshot, target: float) -> None:
+    if config["position_source"] == "position_unavailable":
+        return
     if config["position_source"] == "drive_time":
         return
     entity = config["position_sensor"] if config["position_source"] == "sensor" else config["cover_entity"]
