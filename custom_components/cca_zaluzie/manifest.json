@@ -1,6 +1,9 @@
 {
   "domain": "cca_zaluzie",
   "name": "CCA Žalúzie",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@denkz0ne"
   ],
