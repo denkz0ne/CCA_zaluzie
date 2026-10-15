@@ -27,6 +27,18 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
 - Explicit custom-sensor and calibrated drive-time configurations remain
   manual. A timed estimate remains distinct from measured device feedback.
 
+## 2026.12.0 panel redesign
+
+- The approved HA-style panel adds explicit top-edge drag grips, durable ordering,
+  observed last-movement direction and stable selection/drafts through reloads.
+- Selective multi-cover configuration validates all candidates and revisions before
+  writing. Names, entities, physical targets/calibration and native editors remain individual.
+- Overview prediction is replaced by measured history with Recorder fallback and gaps;
+  simulation controls move into configuration. The read-only prediction API remains available.
+- Next actions describe conditional timing and manual deferral without changing the
+  evaluator or enabling automatic return when the user disabled it.
+- See [panel operation](PANEL.md) and the approved UI specification for details.
+
 ## User goal
 
 Create a Home Assistant custom integration that manages multiple blinds/shutters from one config-flow-driven integration and presents a polished per-cover control dashboard. The behavioral reference is the latest upstream Cover Control Automation (CCA). The visual and functional layout reference is the user's **Svetlo v tme** / **Entity Controller (EC)** integration. This is not an instruction to clone either project's code.

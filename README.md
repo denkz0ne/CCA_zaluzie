@@ -6,7 +6,7 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-The installable integration is version **2026.11.0**, for Home Assistant
+The installable integration is version **2026.12.0**, for Home Assistant
 **2026.9.0+**. The minimum is 2026.9; CI checks both the minimum release line
 and the current release. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
@@ -17,7 +17,7 @@ and the current release. Download the published asset from
    category **Integration**, and download CCA Žalúzie.
 2. Restart Home Assistant manually after installation.
 3. Open Settings → Devices & services → Add integration → **CCA Žalúzie**.
-4. Select one cover, give it a name and configure its morning/evening window.
+4. Select one cover, give it a name and configure its morning/evening times.
 5. Open **CCA Žalúzie** in the sidebar for controls, history and grouped settings.
    Add each additional cover as its own independent integration entry.
 
@@ -32,6 +32,16 @@ movement inhibition and pending events. Configuration drafts belong to their
 selected cover and survive section/cover switching; Save commits to HA and
 Discard restores the saved settings. Native options also expose advanced HA
 condition/action editors.
+
+Drag the highlighted grip at the top of a cover card to change its order.
+The grip also supports keyboard arrows and explicit move buttons. Ctrl/Cmd-click
+or use selection checkboxes to edit common settings for several covers. Only
+explicitly changed fields are saved; individual names, sensors, physical positions
+and action editors remain protected. Changes made elsewhere are detected before saving.
+
+The next-action card explains scheduled actions and manual protection delays.
+History shows measured positions with unavailable intervals left as gaps;
+simulated/estimated positions are distinct. Simulation controls are in settings.
 
 Morning/evening use Early/Late windows and optional workday/calendar/sensor
 conditions. Sun shading moves the whole cover to a partial vertical position.
@@ -60,6 +70,7 @@ silently restarts after HA restarts.
 
 ## Documentation and checks
 
+- [Panel operation, ordering and bulk editing](docs/PANEL.md)
 - [Feature mapping and implementation decisions](docs/FEATURE_MATRIX.md)
 - [Integration icon and HA brand assets](docs/BRANDING.md)
 - [Behavior reference](docs/CCA_REFERENCE.md)

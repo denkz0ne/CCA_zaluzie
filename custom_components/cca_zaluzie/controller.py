@@ -35,6 +35,7 @@ from .engine import evaluate, hold_current, mark_manual
 from .model import Decision, Reading, Runtime, Snapshot
 from .operations import MotorOperations, OperationError
 from .position import detect_position_source
+from .presentation import MeasuredHistory, build_presentation
 
 _LOGGER = logging.getLogger(__name__)
 _TERMINAL_RESET = {
@@ -57,6 +58,12 @@ class CoverController:
         self.simulation_shadow: dict[str, Any] | None = None
         self._simulation_elapsed = 0.0
         self.history: list[dict] = []
+        self._measured_history = MeasuredHistory(
+            limit=max(1000, int(self.config["history_limit"])),
+            retention_days=self.config["retention_days"],
+            open_position=self.config["open_position"],
+            close_position=self.config["close_position"],
+        )
         self.decision = Decision(None, "idle", "idle", "Inicializácia")
         self.operations = MotorOperations(self.config, self.runtime, self)
         self.store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -158,18 +165,14 @@ class CoverController:
             motion = shadow["motion"]
             elapsed = max(0.0, self.monotonic() - motion["started"])
             progress = min(1.0, elapsed / motion["duration"])
-            shadow["position"] = motion["from"] + (
-                motion["target"] - motion["from"]
-            ) * progress
+            shadow["position"] = motion["from"] + (motion["target"] - motion["from"]) * progress
             if progress >= 1:
                 shadow["position"] = motion["target"]
                 shadow["motion"] = None
         shadow_position = shadow.get("position") if shadow else None
         return available, shadow_position if shadow_position is not None else physical_position
 
-    async def _dispatch_motor_service(
-        self, service: str, data: dict, context: Context
-    ) -> None:
+    async def _dispatch_motor_service(self, service: str, data: dict, context: Context) -> None:
         if self.simulation_enabled:
             shadow = self.simulation_shadow
             if shadow is None:
@@ -306,13 +309,10 @@ class CoverController:
             available, position = self.observe()
             self.simulation_shadow = {
                 "position": (
-                    position
-                    if position is not None
-                    else self._physical_runtime.estimated_position
+                    position if position is not None else self._physical_runtime.estimated_position
                 ),
                 "available": available,
-                "calibrated": self.position_source != "drive_time"
-                and position is not None,
+                "calibrated": self.position_source != "drive_time" and position is not None,
                 "motion": None,
             }
             self._simulation_elapsed = 0.0
@@ -341,9 +341,7 @@ class CoverController:
         simulation = saved.get("simulation", {})
         self.simulation_enabled = bool(simulation.get("enabled", False))
         self.simulation_history = saved.get("simulation_history", [])[-1000:]
-        self.simulation_shadow = (
-            saved.get("simulation_shadow") if self.simulation_enabled else None
-        )
+        self.simulation_shadow = saved.get("simulation_shadow") if self.simulation_enabled else None
         if self.simulation_enabled:
             self._physical_runtime = physical_runtime
             self.runtime = Runtime.from_dict(
@@ -352,6 +350,14 @@ class CoverController:
         else:
             self.runtime = physical_runtime
         self.history = saved.get("history", [])
+        self._measured_history = MeasuredHistory.from_dict(
+            saved.get("measured_history", {}),
+            limit=max(1000, int(self.config["history_limit"])),
+            retention_days=self.config["retention_days"],
+            open_position=self.config["open_position"],
+            close_position=self.config["close_position"],
+        )
+        self._measured_history.restart(dt_util.utcnow())
         self.runtime.allow_reconcile = self.config["startup_recovery"]
         if self._physical_runtime is not None:
             self._physical_runtime.allow_reconcile = False
@@ -387,6 +393,9 @@ class CoverController:
         self._active = True
         self._unsubs.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._on_cover_service))
         self._last_available, self._last_position = self.observe()
+        self._measured_history.observe(
+            dt_util.utcnow(), self._last_available, self._last_position, source=self.position_source
+        )
         self._last_usable = self._last_available and (
             self._last_position is not None or self.position_source == "drive_time"
         )
@@ -440,6 +449,13 @@ class CoverController:
         feedback_entities = {self.config["cover_entity"]}
         if self.position_source == "sensor":
             feedback_entities.add(self.config["position_sensor"])
+        if event.data["entity_id"] in feedback_entities:
+            available, position = self.observe()
+            # observe() reads real feedback even while dry-run advances its own clock.
+            if self._measured_history.observe(
+                dt_util.utcnow(), available, position, source=self.position_source
+            ):
+                await self._persist()
         if event.data["entity_id"] in feedback_entities and state is not None:
             available, position = self.observe()
             context = state.context
@@ -482,9 +498,7 @@ class CoverController:
             ):
                 command.update(status="completed", ended=self.now(), observed=position)
                 await self.record("command_completed", command.copy())
-            usable = available and (
-                position is not None or self.position_source == "drive_time"
-            )
+            usable = available and (position is not None or self.position_source == "drive_time")
             if usable and not self._last_usable:
                 if self.config["recovery_enabled"]:
                     self.runtime.allow_reconcile = True
@@ -521,9 +535,7 @@ class CoverController:
                 forecasts = response.get(weather, {}).get("forecast", [])
                 forecast = forecasts[0] if forecasts else {}
                 self._future_forecasts[weather] = [
-                    item
-                    for item in forecasts
-                    if isinstance(item, dict) and item.get("datetime")
+                    item for item in forecasts if isinstance(item, dict) and item.get("datetime")
                 ]
                 self._forecast[weather] = Reading(
                     str(forecast.get("temperature", "unknown"))
@@ -608,6 +620,10 @@ class CoverController:
                 hold_current(self.runtime, decision.target, decision.mode, explicit=True)
                 decision.inhibit = "startup_hold"
             available, position = self.observe()
+            if self._measured_history.observe(
+                dt_util.utcnow(), available, position, source=self.position_source
+            ):
+                await self._persist()
             if available and position is None and self.position_source != "drive_time":
                 decision.inhibit = "position_unknown"
             command = self.runtime.command
@@ -699,7 +715,9 @@ class CoverController:
                 await self.record("drive_pending", {"target": target, "due": self.now() + delay})
                 await self.sleep(delay)
             self.runtime.pending_dispatch = None
-            current = evaluate(self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now())
+            current = evaluate(
+                self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now()
+            )
             if current.inhibit or (current.target, current.mode, current.action) != (
                 target,
                 mode,
@@ -732,7 +750,9 @@ class CoverController:
                 return
             await self._run_script(f"{action}_before")
             # Before-actions may change pause, contacts or availability. Recheck immediately.
-            current = evaluate(self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now())
+            current = evaluate(
+                self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now()
+            )
             if current.inhibit or (current.target, current.mode, current.action) != (
                 target,
                 mode,
@@ -752,9 +772,7 @@ class CoverController:
                     "action": action,
                     "mode": mode,
                     "status": (
-                        "simulated_custom_action"
-                        if self.simulation_enabled
-                        else "custom_sent"
+                        "simulated_custom_action" if self.simulation_enabled else "custom_sent"
                     ),
                     "started": self.now(),
                     "deadline": self.now() + self.config["movement_timeout"],
@@ -766,7 +784,9 @@ class CoverController:
                         "target": target,
                         "action": action,
                         "would_run": self.simulation_enabled,
-                        "reason": "Simulácia blokuje vlastné akcie" if self.simulation_enabled else None,
+                        "reason": "Simulácia blokuje vlastné akcie"
+                        if self.simulation_enabled
+                        else None,
                     },
                 )
                 moved = True
@@ -815,6 +835,7 @@ class CoverController:
                             else self.runtime.to_dict()
                         ),
                         "history": deepcopy(self.history),
+                        "measured_history": self._measured_history.to_dict(),
                         "simulation": {"enabled": self.simulation_enabled},
                         "simulation_runtime": (
                             self.runtime.to_dict() if self.simulation_enabled else None
@@ -869,7 +890,7 @@ class CoverController:
         if self.simulation_enabled:
             record["simulated"] = True
             self.simulation_history.append(record)
-            self.simulation_history = self.simulation_history[-int(self.config["history_limit"]):]
+            self.simulation_history = self.simulation_history[-int(self.config["history_limit"]) :]
         else:
             self.history.append(record)
         cutoff = self.now() - self.config["retention_days"] * 86400
@@ -950,6 +971,11 @@ class CoverController:
             "cover_entity": self.config["cover_entity"],
             "available": available,
             "position": position,
+            "last_movement": deepcopy(self._measured_history.last_movement),
+            "position_history": deepcopy(self._measured_history.points),
+            **build_presentation(
+                self.config, self.runtime, self._snapshot_inputs(), self.decision, dt_util.now()
+            ),
             "position_source": {
                 "automatic": source_auto,
                 "selected": self.position_source,
@@ -972,6 +998,21 @@ class CoverController:
             },
             "server_time": self.now(),
         }
+
+    async def async_panel_history(self, hours: int = 24) -> dict[str, Any]:
+        """Return measured history with optional real Recorder samples, without writes."""
+        from .panel_history import async_recorder_points
+
+        now = dt_util.utcnow()
+        result = self._measured_history.read(hours, now, self.history)
+        recorded = await async_recorder_points(
+            self.hass, self.config, now - timedelta(hours=hours), now
+        )
+        # Stored points take precedence at equal times, preserving explicit gaps.
+        points = {point["at"]: point for point in recorded}
+        points.update({point["at"]: point for point in result["points"]})
+        result["points"] = sorted(points.values(), key=lambda point: point["at"])[-20000:]
+        return result
 
     async def async_predict(self, start_date: str, days: int = 2) -> dict[str, Any]:
         """Return an isolated forecast without calling HA services or mutating state."""

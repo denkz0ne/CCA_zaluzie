@@ -63,6 +63,11 @@ strings = {
         "error": {"invalid_config": "Skontroluj nastavenia formulára."},
     },
 }
+strings["config"]["step"]["position_source"] = step(
+    "Spätná väzba polohy", ["position_source", "position_sensor", "drive_time"]
+)
+strings["config"]["step"]["position_source"]["description"] = "{reason} {error}"
+strings["options"]["step"]["cover"]["description"] = "{error} {reason}"
 for path in [
     component / "strings.json",
     component / "translations" / "sk.json",

@@ -2,7 +2,7 @@
 
 import pytest
 
-from custom_components.cca_zaluzie.config import ConfigError, validate_config
+from custom_components.cca_zaluzie.config import FIELDS, GROUPS, ConfigError, validate_config
 
 
 def test_defaults_and_awning_direction():
@@ -52,15 +52,33 @@ def test_validation_does_not_mutate_nested_input():
 
 def test_explicit_legacy_sources_remain_manual():
     for source in ("sensor", "drive_time", "position"):
-        cfg = validate_config({"cover_entity": "cover.blind", "position_source": source,
-                               "position_sensor": "sensor.blind" if source == "sensor" else ""})
+        cfg = validate_config(
+            {
+                "cover_entity": "cover.blind",
+                "position_source": source,
+                "position_sensor": "sensor.blind" if source == "sensor" else "",
+            }
+        )
         assert cfg["position_source_auto"] is False
 
 
 def test_manual_source_mode_is_validated_and_preserved():
-    raw = {"cover_entity": "cover.blind", "position_source_auto": False,
-           "position_source": "current_position"}
+    raw = {
+        "cover_entity": "cover.blind",
+        "position_source_auto": False,
+        "position_source": "current_position",
+    }
     assert validate_config(raw)["position_source_auto"] is False
     for value in ("false", None):
         with pytest.raises(ConfigError):
             validate_config({**raw, "position_source_auto": value})
+
+
+def test_every_setting_explains_its_effect_in_plain_language():
+    assert all(field.help.strip() for field in FIELDS.values())
+    assert "časové okno" not in " ".join(f.label.lower() for f in FIELDS.values())
+    assert GROUPS["manual"] == "Manuálne ovládanie"
+    assert FIELDS["time_enabled"].label == "Používať čas otvorenia a zatvorenia"
+    assert "pohyb" in FIELDS["manual_return"].help.lower()
+    assert "0" in FIELDS["manual_timeout"].help
+    assert "60" in FIELDS["drive_time"].help or "odhad" in FIELDS["drive_time"].help.lower()

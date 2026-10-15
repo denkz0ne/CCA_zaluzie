@@ -1,3 +1,21 @@
+# 2026.12.0
+
+- Redesign the complete panel with Home Assistant controls, visible main switches,
+  grouped schedules/settings, searchable entity pickers and contextual help.
+- Add persistent cover ordering with a highlighted top grip, insertion marker,
+  keyboard/touch alternatives and stable selection/drafts across reloads.
+- Add Ctrl/Cmd or checkbox multi-selection and selective bulk edits with protected
+  device-specific fields, validation of all candidates and stale-save detection.
+- Show the last confirmed physical movement direction near the cover icon.
+- Describe the next action, conditional timing and manual protection deferral;
+  distinguish protection expiry from automatic return to the current target.
+- Replace overview prediction with measured position history, optional Recorder
+  reads and explicit gaps. Keep simulations separate and their controls in settings.
+- Improve Slovak setting names/help, simplify the summary and dismiss success
+  notifications automatically after four seconds.
+- Preserve cover identities, existing settings, CCA mechanics, dry-run motor safety,
+  the 60-second end-stop reset and Home Assistant 2026.9 minimum.
+
 # 2026.11.1
 
 - Automatically select reliable live cover position feedback and hide the
