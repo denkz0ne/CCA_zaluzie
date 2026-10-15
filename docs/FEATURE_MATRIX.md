@@ -8,7 +8,7 @@ with Home Assistant's vertical position convention at the service boundary.
 |---|---|---|
 | One independent controller per cover, multiple entries | Implemented | Config flow, stable entities, separate storage; HA lifecycle tests |
 | Blind, shutter, awning and sunshade; position orientation | Implemented | Validated type/target settings; config and regression tests |
-| Position attribute, selected sensor, calibrated drive time and tolerance | Implemented | Controller feedback adapter and motor operations; feedback and timed-motion tests |
+| Automatic measured-position detection with manual fallback, selected sensor, calibrated drive time and tolerance | Implemented | Prefers valid `current_position`, falls back to valid `position`, exposes manual choice on ambiguity/unavailability, blocks unresolved movement; detector, HA lifecycle, motor and browser tests |
 | Morning/evening Early/Late, today/tomorrow workdays, calendar | Implemented | Engine schedule windows and calendar start/end matching; engine and schedule tests |
 | Brightness/sun elevation, stable duration, AND/OR, hysteresis, once per day | Implemented | Separate logical schedule ownership and dispatch; engine and schedule tests |
 | Whole-cover partial-height shading | Implemented | Shading target plus alternate trigger/target; engine tests |

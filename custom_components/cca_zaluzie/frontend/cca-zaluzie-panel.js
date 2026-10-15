@@ -379,8 +379,20 @@ export class CCAZaluziePanel extends HTMLElement {
     const cfg = this._drafts.get(c.entry_id) || c.config,
       group = this._group,
       fields = Object.values(this._fields || {}).filter(
-        (f) => f.group === group,
+        (f) =>
+          f.group === group &&
+          !(
+            f.key === "position_source" &&
+            c.position_source?.automatic &&
+            c.position_source?.selected
+          ),
       );
+    const positionSourceNotice =
+      group === "cover" &&
+      c.position_source?.automatic &&
+      !c.position_source?.selected
+        ? `<div class="advanced-note" role="status">${esc(c.position_source.reason === "ambiguous_position_feedback" ? "Home Assistant hlási dve rozdielne polohy. Vyber zdroj spätnej väzby ručne." : "Poloha žalúzie nie je dostupná. Vyber zdroj spätnej väzby ručne.")}</div>`
+        : "";
     const summary =
       group === "summary"
         ? Object.entries(this._groups)
@@ -405,7 +417,7 @@ export class CCAZaluziePanel extends HTMLElement {
       )
       .join(
         "",
-      )}</nav><div class="panel form-card"><div class="config-heading"><span class="cover-icon">▥</span><div><strong>${esc(c.name)}</strong><small>${esc(c.cover_entity)} · nastavenia tejto žalúzie</small></div></div><div class="config-body"><h2>${esc(this._groups[group] || "Súhrn nastavení")}</h2>${group === "advanced" && !customElements.get("ha-selector") ? '<div class="advanced-note">Vlastné podmienky a akcie upravíš natívnym editorom Home Assistanta.<br><a href="/config/integrations/integration/cca_zaluzie">Otvoriť nastavenia integrácie →</a></div>' : ""}${summary || `<div class="form-grid">${fields.map((f) => this._field(f, cfg)).join("")}</div>`}<datalist id="ha-entities">${Object.entries(
+      )}</nav><div class="panel form-card"><div class="config-heading"><span class="cover-icon">▥</span><div><strong>${esc(c.name)}</strong><small>${esc(c.cover_entity)} · nastavenia tejto žalúzie</small></div></div><div class="config-body"><h2>${esc(this._groups[group] || "Súhrn nastavení")}</h2>${group === "advanced" && !customElements.get("ha-selector") ? '<div class="advanced-note">Vlastné podmienky a akcie upravíš natívnym editorom Home Assistanta.<br><a href="/config/integrations/integration/cca_zaluzie">Otvoriť nastavenia integrácie →</a></div>' : ""}${positionSourceNotice}${summary || `<div class="form-grid">${fields.map((f) => this._field(f, cfg)).join("")}</div>`}<datalist id="ha-entities">${Object.entries(
       this._hass?.states || {},
     )
       .map(
@@ -475,6 +487,7 @@ export class CCAZaluziePanel extends HTMLElement {
             : event.type === "value-changed"
               ? event.detail.value
               : input.value;
+    if (key === "position_source") cfg.position_source_auto = false;
     this._dirty.add(this._selected);
     const state = this.shadowRoot.querySelector(".draft-state");
     if (state) state.textContent = "Neuložené zmeny · iba táto žalúzia";

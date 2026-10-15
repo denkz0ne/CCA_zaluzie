@@ -62,6 +62,18 @@ async def test_reset_closes_then_dwell_exactly_sixty_then_stop():
     assert op.runtime.reset["status"] == "completed"
 
 
+async def test_unresolved_automatic_source_blocks_forced_move_and_reset():
+    port = Port()
+    port.position_source = None
+    op = motor(port)
+
+    with pytest.raises(OperationError, match="Automaticky sa nenašla"):
+        await op.command(58, force=True)
+    with pytest.raises(OperationError, match="Automaticky sa nenašla"):
+        await op.start_reset()
+    assert port.calls == []
+
+
 async def test_reset_dwell_starts_after_arrival_not_close_command():
     port = Port()
     port.stall = True

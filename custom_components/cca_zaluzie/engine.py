@@ -190,6 +190,8 @@ def _shade_predicates(cfg: dict, snap: Snapshot, end: bool) -> dict[str, bool | 
 
 
 def _position(cfg: dict, snap: Snapshot) -> float | None:
+    if cfg["position_source"] == "position_unavailable":
+        return None
     if cfg["position_source"] == "sensor":
         return snap.get(cfg["position_sensor"]).number()
     if cfg["position_source"] == "drive_time":

@@ -34,6 +34,7 @@ from .const import DOMAIN, EVENT_UPDATED, STORAGE_VERSION
 from .engine import evaluate, hold_current, mark_manual
 from .model import Decision, Reading, Runtime, Snapshot
 from .operations import MotorOperations, OperationError
+from .position import detect_position_source
 
 _LOGGER = logging.getLogger(__name__)
 _TERMINAL_RESET = {
@@ -90,6 +91,22 @@ class CoverController:
             return self._simulation_elapsed
         return asyncio.get_running_loop().time()
 
+    @property
+    def position_source(self) -> str | None:
+        if self.config.get("position_source_auto"):
+            state = self.hass.states.get(self.config["cover_entity"])
+            if state is None or state.state in ("unknown", "unavailable"):
+                return None
+            return detect_position_source(
+                state.attributes, self.config["position_tolerance"]
+            ).source
+        return self.config["position_source"]
+
+    def _effective_config(self) -> dict:
+        config = deepcopy(self.config)
+        config["position_source"] = self.position_source or "position_unavailable"
+        return config
+
     async def sleep(self, seconds: float) -> None:
         if self.simulation_enabled:
             self._simulation_elapsed += max(0, seconds)
@@ -109,7 +126,9 @@ class CoverController:
         state = self.hass.states.get(self.config["cover_entity"])
         if state is None or state.state in ("unknown", "unavailable"):
             return False, None
-        source = self.config["position_source"]
+        source = self.position_source
+        if source is None:
+            return True, None
         if source == "drive_time":
             return True, None
         if source == "sensor":
@@ -215,7 +234,7 @@ class CoverController:
         state = self.hass.states.get(self.config["cover_entity"])
         supported = state.attributes.get("supported_features", 0) if state else 0
         if service == "set_cover_position" and not (supported & 4):
-            if self.config["position_source"] != "drive_time":
+            if self.position_source != "drive_time":
                 raise OperationError("Zariadenie nepodporuje nastavenie čiastočnej polohy")
             await self._timed_position(data["position"], context)
             return
@@ -292,7 +311,7 @@ class CoverController:
                     else self._physical_runtime.estimated_position
                 ),
                 "available": available,
-                "calibrated": self.config["position_source"] != "drive_time"
+                "calibrated": self.position_source != "drive_time"
                 and position is not None,
                 "motion": None,
             }
@@ -369,7 +388,7 @@ class CoverController:
         self._unsubs.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._on_cover_service))
         self._last_available, self._last_position = self.observe()
         self._last_usable = self._last_available and (
-            self._last_position is not None or self.config["position_source"] == "drive_time"
+            self._last_position is not None or self.position_source == "drive_time"
         )
         watched = {
             self.config[k] for k, spec in FIELDS.items() if spec.kind == "entity" and self.config[k]
@@ -419,7 +438,7 @@ class CoverController:
     async def _state_changed(self, event) -> None:
         state = event.data.get("new_state")
         feedback_entities = {self.config["cover_entity"]}
-        if self.config["position_source"] == "sensor":
+        if self.position_source == "sensor":
             feedback_entities.add(self.config["position_sensor"])
         if event.data["entity_id"] in feedback_entities and state is not None:
             available, position = self.observe()
@@ -439,7 +458,7 @@ class CoverController:
                 or (moved and not active_command and not self.operations.resetting)
             )
             if (
-                self.config["position_source"] == "drive_time"
+                self.position_source == "drive_time"
                 and state.state in ("opening", "closing")
                 and not own
                 and not active_command
@@ -464,7 +483,7 @@ class CoverController:
                 command.update(status="completed", ended=self.now(), observed=position)
                 await self.record("command_completed", command.copy())
             usable = available and (
-                position is not None or self.config["position_source"] == "drive_time"
+                position is not None or self.position_source == "drive_time"
             )
             if usable and not self._last_usable:
                 if self.config["recovery_enabled"]:
@@ -582,14 +601,14 @@ class CoverController:
             old = self.decision
             was_manual = self.runtime.manual_since is not None
             self.decision = evaluate(
-                self.config, self.runtime, self._snapshot_inputs(), dt_util.now()
+                self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now()
             )
             decision = self.decision
             if self._starting and not self.config["startup_recovery"]:
                 hold_current(self.runtime, decision.target, decision.mode, explicit=True)
                 decision.inhibit = "startup_hold"
             available, position = self.observe()
-            if available and position is None and self.config["position_source"] != "drive_time":
+            if available and position is None and self.position_source != "drive_time":
                 decision.inhibit = "position_unknown"
             command = self.runtime.command
             if command and command.get("status") == "moving" and self.now() >= command["deadline"]:
@@ -680,7 +699,7 @@ class CoverController:
                 await self.record("drive_pending", {"target": target, "due": self.now() + delay})
                 await self.sleep(delay)
             self.runtime.pending_dispatch = None
-            current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
+            current = evaluate(self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now())
             if current.inhibit or (current.target, current.mode, current.action) != (
                 target,
                 mode,
@@ -713,7 +732,7 @@ class CoverController:
                 return
             await self._run_script(f"{action}_before")
             # Before-actions may change pause, contacts or availability. Recheck immediately.
-            current = evaluate(self.config, self.runtime, self._snapshot_inputs(), dt_util.now())
+            current = evaluate(self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now())
             if current.inhibit or (current.target, current.mode, current.action) != (
                 target,
                 mode,
@@ -881,7 +900,7 @@ class CoverController:
         self._notify()
         if (
             event in ("reset_completed", "simulated_reset_completed")
-            and self.config["position_source"] == "drive_time"
+            and self.position_source == "drive_time"
         ):
             self.runtime.estimated_position = 0
         if event in _TERMINAL_RESET and self._active:
@@ -913,12 +932,29 @@ class CoverController:
                 if x is not None
             )
             decision["pending"] = "drive"
+        source_auto = bool(self.config.get("position_source_auto"))
+        source_state = self.hass.states.get(self.config["cover_entity"])
+        source_detection = (
+            detect_position_source(
+                source_state.attributes
+                if source_state and source_state.state not in ("unknown", "unavailable")
+                else {},
+                self.config["position_tolerance"],
+            )
+            if source_auto
+            else None
+        )
         return {
             "entry_id": self.entry.entry_id,
             "name": self.config["name"],
             "cover_entity": self.config["cover_entity"],
             "available": available,
             "position": position,
+            "position_source": {
+                "automatic": source_auto,
+                "selected": self.position_source,
+                "reason": source_detection.reason if source_detection else None,
+            },
             "config": deepcopy(self.config),
             "decision": decision,
             "runtime": runtime,
@@ -962,7 +998,7 @@ class CoverController:
         cache_key = hashlib.sha256(
             json.dumps(
                 {
-                    "config": self.config,
+                    "config": self._effective_config(),
                     "runtime": runtime.to_dict(),
                     "entities": {
                         entity: {
@@ -991,7 +1027,7 @@ class CoverController:
 
         result = await self.hass.async_add_executor_job(
             compute_prediction,
-            deepcopy(self.config),
+            self._effective_config(),
             runtime,
             base,
             self.hass.config.time_zone,
@@ -1059,7 +1095,7 @@ class CoverController:
             target = targets[action]
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
-            if self.config["position_source"] == "drive_time":
+            if self.position_source == "drive_time":
                 if self.operations.lock.locked() or self.operations.resetting:
                     raise OperationError("Prebieha pohyb; pred ďalším povelom použi STOP")
                 if not self.observe()[0]:

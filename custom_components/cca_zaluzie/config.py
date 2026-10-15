@@ -513,10 +513,18 @@ def validate_config(raw: dict, *, cover_entity: str | None = None) -> dict:
     """Validate untrusted data and return an independent normalized configuration."""
     if not isinstance(raw, dict):
         raise ConfigError("config", "očakáva sa objekt")
-    unknown = set(raw) - FIELDS.keys()
+    unknown = set(raw) - FIELDS.keys() - {"position_source_auto"}
     if unknown:
         raise ConfigError(sorted(unknown)[0], "neznáme nastavenie")
     cfg = {key: deepcopy(raw.get(key, spec.default)) for key, spec in FIELDS.items()}
+    auto_source = (
+        raw["position_source_auto"]
+        if "position_source_auto" in raw
+        else raw.get("position_source", "current_position") == "current_position"
+    )
+    if type(auto_source) is not bool:
+        raise ConfigError("position_source", "automatický výber musí byť prepínač")
+    cfg["position_source_auto"] = auto_source
     if cfg["cover_type"] in ("awning", "sunshade"):
         for key, value in (("open_position", 0), ("close_position", 100), ("lockout_position", 0)):
             if key not in raw:

@@ -81,6 +81,7 @@ async def test_user_config_creates_one_entry_and_rejects_duplicate(hass):
         },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["position_source_auto"] is True
     duplicate = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": "user"},
@@ -101,6 +102,21 @@ async def test_invalid_schedule_stays_in_flow(hass):
         result["flow_id"], {"morning_early": "10:00", "morning_late": "08:00"}
     )
     assert result["type"] == FlowResultType.FORM and result["errors"]
+
+
+async def test_setup_asks_for_manual_source_when_feedback_missing(hass):
+    hass.states.async_set("cover.blind", "open")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"cover_entity": "cover.blind", "name": "Blind", "cover_type": "blind"}
+    )
+    assert result["step_id"] == "position_source"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"position_source": "drive_time", "drive_time": 72}
+    )
+    assert result["step_id"] == "schedule"
+    assert result["data"]["position_source_auto"] is False
+    assert result["data"]["position_source"] == "drive_time"
 
 
 async def test_commands_target_configured_cover_with_own_context(hass, entry):
@@ -341,6 +357,41 @@ async def test_every_native_options_section_opens(hass, entry, group):
     )
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == group
+
+
+async def test_auto_position_source_is_hidden_until_feedback_is_unresolved(hass, entry):
+    config_entry, _ = entry
+    menu = await hass.config_entries.options.async_init(config_entry.entry_id)
+    form = await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": "cover"}
+    )
+    keys = {marker.schema for marker in form["data_schema"].schema}
+    assert "position_source" not in keys
+
+    hass.states.async_set("cover.blind", "open")
+    menu = await hass.config_entries.options.async_init(config_entry.entry_id)
+    form = await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": "cover"}
+    )
+    keys = {marker.schema for marker in form["data_schema"].schema}
+    assert "position_source" in keys
+
+
+async def test_automatic_source_falls_back_and_conflicts_block_commands(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    hass.states.async_set("cover.blind", "open", {"current_position": "unknown", "position": 71})
+    await hass.async_block_till_done()
+    assert controller.position_source == "position"
+    assert controller.observe() == (True, 71)
+
+    hass.states.async_set("cover.blind", "open", {"current_position": 100, "position": 50})
+    await hass.async_block_till_done()
+    assert controller.position_source is None
+    assert controller.snapshot()["position_source"]["reason"] == "ambiguous_position_feedback"
+    with pytest.raises(OperationError, match="Automaticky sa nenašla"):
+        await controller.operations.command(58, force=True)
+    assert calls == []
 
 
 async def test_panel_serves_the_production_module_and_stylesheet(hass, entry, hass_client):

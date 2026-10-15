@@ -145,6 +145,58 @@ test("mobile layout keeps controls and fields reachable", async ({ page }) => {
   ).toBeLessThanOrEqual(390);
 });
 
+test("hides position source for reliable automatic feedback", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const c = window.fixture.controllers[0];
+    c.position_source = {
+      automatic: true,
+      selected: "current_position",
+      reason: null,
+    };
+    window.publish({ controller: c });
+  });
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  await expect(page.getByLabel("Zdroj polohy", { exact: true })).toHaveCount(0);
+});
+
+test("unresolved feedback exposes reason and saves a manual source", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const c = window.fixture.controllers[0];
+    c.position_source = {
+      automatic: true,
+      selected: null,
+      reason: "ambiguous_position_feedback",
+    };
+    window.publish({ controller: c });
+  });
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  await expect(page.getByText(/dve rozdielne polohy/)).toBeVisible();
+  await page
+    .getByLabel("Zdroj polohy", { exact: true })
+    .selectOption("position");
+  await page.getByRole("button", { name: "Uložiť zmeny", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.calls.findLast((call) => call.type === "cca_zaluzie/configure")
+            ?.config?.position_source_auto,
+      ),
+    )
+    .toBe(false);
+  expect(
+    await page.evaluate(
+      () =>
+        window.calls.findLast((call) => call.type === "cca_zaluzie/configure")
+          .config.position_source,
+    ),
+  ).toBe("position");
+});
+
 test("add cover link starts the Home Assistant integration flow", async ({
   page,
 }) => {

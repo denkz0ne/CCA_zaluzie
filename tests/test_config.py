@@ -6,7 +6,9 @@ from custom_components.cca_zaluzie.config import ConfigError, validate_config
 
 
 def test_defaults_and_awning_direction():
-    assert validate_config({"cover_entity": "cover.blind"})["open_position"] == 100
+    config = validate_config({"cover_entity": "cover.blind"})
+    assert config["open_position"] == 100
+    assert config["position_source_auto"] is True
     config = validate_config({"cover_entity": "cover.awning", "cover_type": "awning"})
     assert (config["open_position"], config["close_position"]) == (0, 100)
     assert config["ventilation_enabled"] is False
@@ -46,3 +48,19 @@ def test_validation_does_not_mutate_nested_input():
     result = validate_config(raw)
     result["manual_blocks"].append("close")
     assert raw["manual_blocks"] == ["open"]
+
+
+def test_explicit_legacy_sources_remain_manual():
+    for source in ("sensor", "drive_time", "position"):
+        cfg = validate_config({"cover_entity": "cover.blind", "position_source": source,
+                               "position_sensor": "sensor.blind" if source == "sensor" else ""})
+        assert cfg["position_source_auto"] is False
+
+
+def test_manual_source_mode_is_validated_and_preserved():
+    raw = {"cover_entity": "cover.blind", "position_source_auto": False,
+           "position_source": "current_position"}
+    assert validate_config(raw)["position_source_auto"] is False
+    for value in ("false", None):
+        with pytest.raises(ConfigError):
+            validate_config({**raw, "position_source_auto": value})

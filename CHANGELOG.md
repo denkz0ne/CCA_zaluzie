@@ -1,3 +1,11 @@
+# 2026.11.1
+
+- Automatically select reliable live cover position feedback and hide the
+  source selector while detection succeeds.
+- Show the source selector with a reason when feedback is missing or conflicting;
+  block movement and reset until a usable source is available.
+- Preserve explicit custom sensor and calibrated drive-time configurations.
+
 # 2026.11.0
 
 - Register the integration as a full Home Assistant service integration and repair the Add-cover flow.

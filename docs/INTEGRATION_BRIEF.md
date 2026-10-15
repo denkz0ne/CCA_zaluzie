@@ -15,6 +15,18 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
   and a 1–7 day horizon. It reads matching future provider forecasts when available and labels
   uncertain future inputs. The endpoint performs no service calls or persistent/runtime writes.
 
+## 2026.11.1 automatic position feedback
+
+- New covers automatically prefer a finite numeric `current_position` in the
+  0–100 range, then use a valid `position` attribute when the standard value is
+  absent or invalid.
+- If both attributes are valid but differ beyond the configured tolerance, or
+  neither yields live feedback, the setup/options flow and side panel expose the
+  source selector with the reason. An unresolved source blocks movement and
+  end-stop reset.
+- Explicit custom-sensor and calibrated drive-time configurations remain
+  manual. A timed estimate remains distinct from measured device feedback.
+
 ## User goal
 
 Create a Home Assistant custom integration that manages multiple blinds/shutters from one config-flow-driven integration and presents a polished per-cover control dashboard. The behavioral reference is the latest upstream Cover Control Automation (CCA). The visual and functional layout reference is the user's **Svetlo v tme** / **Entity Controller (EC)** integration. This is not an instruction to clone either project's code.

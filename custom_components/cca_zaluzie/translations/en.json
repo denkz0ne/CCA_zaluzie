@@ -28,6 +28,19 @@
           "evening_late": "Večer najneskôr · pracovný deň"
         },
         "data_description": {}
+      },
+      "position_source": {
+        "title": "Spätná väzba polohy",
+        "description": "{reason} {error}",
+        "data": {
+          "position_source": "Zdroj polohy",
+          "position_sensor": "Vlastný senzor polohy",
+          "drive_time": "Čas úplnej jazdy"
+        },
+        "data_description": {
+          "position_source": "Vyber zdroj, ktorý zodpovedá aktuálnej polohe žalúzie.",
+          "drive_time": "Kalibrovaný čas úplnej jazdy. Odhad nie je nameraná poloha."
+        }
       }
     },
     "error": {
@@ -55,7 +68,7 @@
       },
       "cover": {
         "title": "Žalúzia",
-        "description": "{error}",
+        "description": "{error} {reason}",
         "data": {
           "name": "Názov",
           "enabled": "Povoliť automatizáciu",

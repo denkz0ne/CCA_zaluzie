@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from custom_components.cca_zaluzie.config import validate_config
-from custom_components.cca_zaluzie.engine import evaluate, mark_manual
+from custom_components.cca_zaluzie.engine import _position, evaluate, mark_manual
 from custom_components.cca_zaluzie.model import Reading, Runtime, Snapshot
 
 TZ = ZoneInfo("Europe/Bratislava")
@@ -40,6 +40,12 @@ def test_sensor_only_has_no_guaranteed_late_time():
         ).target
         is None
     )
+
+
+def test_unresolved_automatic_source_never_uses_cover_attributes():
+    cfg = config()
+    cfg["position_source"] = "position_unavailable"
+    assert _position(cfg, world()) is None
 
 
 def test_workday_sensor_selects_free_day_window():

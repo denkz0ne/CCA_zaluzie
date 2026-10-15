@@ -37,6 +37,10 @@ class MotorOperations:
         return simulated() if simulated else self.port.observe()
 
     @property
+    def _position_source(self) -> str | None:
+        return getattr(self.port, "position_source", self.config["position_source"])
+
+    @property
     def resetting(self) -> bool:
         return bool(
             self.runtime.reset
@@ -68,7 +72,9 @@ class MotorOperations:
             available, position = self._observe()
             if not available:
                 raise OperationError("Žalúzia nie je dostupná")
-            if position is None and self.config["position_source"] != "drive_time" and not force:
+            if self._position_source is None:
+                raise OperationError("Automaticky sa nenašla spoľahlivá spätná väzba polohy")
+            if position is None and self._position_source != "drive_time" and not force:
                 raise OperationError("Spätná väzba polohy nie je dostupná")
             if (
                 position is not None
@@ -78,13 +84,13 @@ class MotorOperations:
                 return False
             previous = self.runtime.command
             if (
-                self.config["position_source"] == "drive_time"
+                self._position_source == "drive_time"
                 and not force
                 and self.runtime.estimated_position == target
             ):
                 return False
             if (
-                self.config["position_source"] == "drive_time"
+                self._position_source == "drive_time"
                 and target not in (0, 100)
                 and self.runtime.estimated_position is None
             ):
@@ -114,7 +120,7 @@ class MotorOperations:
             try:
                 self.motion_task = asyncio.current_task()
                 await self.port.record("command_requested", command.copy())
-                if self.config["position_source"] == "drive_time":
+                if self._position_source == "drive_time":
                     previous_position = self.runtime.estimated_position
                     service = (
                         "open_cover"
@@ -180,7 +186,7 @@ class MotorOperations:
                 await self.port.record("command_interrupted", command.copy())
                 raise
             except Exception as error:
-                if self.config["position_source"] == "drive_time":
+                if self._position_source == "drive_time":
                     self.runtime.estimated_position = None
                 command.update(status="failed", error=str(error))
                 self.runtime.fault = str(error)
@@ -211,7 +217,9 @@ class MotorOperations:
             raise OperationError("Žalúzia už vykonáva inú operáciu")
         if not self._observe()[0]:
             raise OperationError("Žalúzia nie je dostupná")
-        if self.config["position_source"] != "drive_time" and self._observe()[1] is None:
+        if self._position_source is None:
+            raise OperationError("Automaticky sa nenašla spoľahlivá spätná väzba polohy")
+        if self._position_source != "drive_time" and self._observe()[1] is None:
             raise OperationError("Spätná väzba polohy nie je dostupná")
         self.reset_due_monotonic = None
         self.runtime.reset = {"status": "closing", "started": self.port.now(), "due": None}
@@ -235,7 +243,7 @@ class MotorOperations:
                 await self.port.record("reset_started", reset.copy())
                 await self.port.service("close_cover", {})
                 started = self.port.now()
-                if self.config["position_source"] == "drive_time":
+                if self._position_source == "drive_time":
                     await self._wait_available(self.config["drive_time"])
                 else:
                     while True:
@@ -256,7 +264,7 @@ class MotorOperations:
                 await self.port.service("stop_cover", {})
                 available, position = self._observe()
                 if not available or (
-                    self.config["position_source"] != "drive_time" and position != 0
+                    self._position_source != "drive_time" and position != 0
                 ):
                     raise OperationError("Dokončenie resetu sa nepotvrdilo")
                 await self.port.record("reset_stopping", reset.copy())
@@ -302,7 +310,7 @@ class MotorOperations:
             if (
                 self.runtime.reset
                 and self.runtime.reset.get("status") == "dwell"
-                and self.config["position_source"] != "drive_time"
+                and self._position_source != "drive_time"
                 and position != 0
             ):
                 raise OperationError("Spodný doraz sa počas resetu prestal potvrdzovať")
