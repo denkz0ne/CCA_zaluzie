@@ -29,7 +29,7 @@ a dopĺňa ochranu kontaktu po zatvorení.
 
 ## Overenie vydania
 
-Lokálne overenie pred odovzdaním do GitHub CI:
+Lokálne overenie:
 
 - Python: **182 passed, 4 skipped**. Štyri HA lifecycle testy potrebujú Linuxové
   Home Assistant runtime; vykoná ich GitHub Actions.
@@ -39,6 +39,17 @@ Lokálne overenie pred odovzdaním do GitHub CI:
 - Release balík `cca_zaluzie.zip` sa zostavil a overila sa zhoda manifestu,
   panelu a tagovej verzie `2026.12.3`.
 
-Pull request #15 CI prešiel na commite `32277bc`: HA **2026.9.4**, **2026.10.0**
-a **2026.10.1**, browser suite, Ruff, hassfest a HACS validation. Finálny
-dokumentačný commit tieto workflow znovu spúšťa. Tag a archív sa overia po merge.
+Pull request [#15](https://github.com/denkz0ne/CCA_zaluzie/pull/15) bol zlúčený
+do `main` commitom `b81db54`; issue [#13](https://github.com/denkz0ne/CCA_zaluzie/issues/13)
+sa uzavrelo pri merge. CI na finálnom kóde prešlo: HA **2026.9.4**,
+**2026.10.0**, **2026.10.1**, browser suite, Ruff, hassfest a HACS.
+
+Vydanie [`2026.12.3`](https://github.com/denkz0ne/CCA_zaluzie/releases/tag/2026.12.3)
+bolo publikované úspešným release workflow. Stiahnutý `cca_zaluzie.zip` má 34
+súborov, manifest verzie `2026.12.3` a produkčný panel.
+
+SHA-256 publikovaného archívu:
+
+```text
+471dd738ab63f8b6fa8578029ab09caa802ce4ca7d0cf7ad3a8d7df02ec75ed6
+```

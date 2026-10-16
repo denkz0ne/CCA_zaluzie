@@ -2,11 +2,13 @@
 
 **Goal:** Implement the user-approved state/priority simplification in issue #13 with backwards-compatible migration, integration and browser coverage, and release it through GitHub CI.
 
-**Status:** Completing issue #13 for `2026.12.3`; release and issue closure are pending CI and review.
+**Status:** Complete and released as `2026.12.3`; issue #13 is closed.
 
 **Base:** `2026.12.2` (`0d5a8c1`). **Branch:** `feat/issue-13-completion`.
 
 **Source decisions:** `docs/superpowers/specs/2026-10-16-issue-13-decisions.md` and issue #13. User-selected answers are recorded there; unanswered behavior is preserved conservatively.
+
+**Delivery:** PR [#15](https://github.com/denkz0ne/CCA_zaluzie/pull/15), merged as `b81db54`. GitHub Actions passed HA 2026.9.4, 2026.10.0 and 2026.10.1, browser tests, Ruff, hassfest and HACS. Release workflow published [`2026.12.3`](https://github.com/denkz0ne/CCA_zaluzie/releases/tag/2026.12.3). The archive digest and release evidence are recorded in `docs/RELEASE_2026.12.3.md`.
 
 ## Task 1 — Decision model and persistent state
 
