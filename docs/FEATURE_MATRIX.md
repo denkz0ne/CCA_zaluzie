@@ -1,4 +1,4 @@
-# Feature mapping — 2026.12.2
+# Feature mapping — 2026.12.3
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -14,7 +14,7 @@ with Home Assistant's vertical position convention at the service boundary.
 | Whole-cover partial-height shading | Implemented | Shading target plus alternate trigger/target; engine tests |
 | Shading geometry, brightness, two temperatures, forecast/weather/custom input | Implemented | Separate start/end predicates, optional AND/OR groups and independent hot-temperature policy; engine tests |
 | Shading confirmation, cancel/recheck, retry ceilings, immediate geometry end | Implemented | Persisted pending lifecycle and end-action ownership; shading retry tests |
-| Full-open/tilted contacts, lockout and ventilation policies | Implemented | Debounce, full/partial targets, start/end conditions and return policies; engine tests |
+| Single passage contact, lockout and ventilation policies | Implemented | Fast open confirmation (maximum 2 s), stable close confirmation, persisted 30-minute post-close descent lockout, reopen rearm, one explicit safe manual close, and no post-close timer when lockout is off; engine, HA and browser tests. Legacy optional second contact remains compatible |
 | Resident sleep/awake behavior | Implemented | Opening inhibition and configured closing/wake policies; engine and schedule tests |
 | Manual detection, blocking, adoption, reset/return rules | Implemented | Context correlation, configured position sensor, manual engine state; HA and engine tests |
 | Force targets and pause | Implemented | Latest activated Force wins; pause is a final dispatch inhibit; regression tests |
@@ -27,7 +27,7 @@ with Home Assistant's vertical position convention at the service boundary.
 | Full integration discovery and Add flow | Implemented | `integration_type: service`; native dashboard Add route; manifest and browser regression tests |
 | Per-cover dry-run without motor calls | Implemented | Persistent isolated simulation runtime, single motor dispatch gateway, timed shadow position, suppressed native actions and visible panel state; HA and browser tests |
 | Read-only date prediction | Implemented | Production engine on copied state, local date/DST solar geometry, provider forecasts, certainty and assumptions; API and browser tests |
-| Mode correction, exclusive shading/ventilation, phase actions and morning movement merge | Implemented | Internal ±20 percentage-point / 120-second correction session, serialized active phases, confirmed 30-minute morning merge and one-shot phase controls; engine and browser tests |
+| Mode correction, exclusive shading/ventilation, phase actions and morning movement merge | Implemented | Internal ±20 percentage-point / 120-second correction session, serialized active phases including contact changes during shading, confirmed 30-minute morning merge and one-shot phase controls; engine and browser tests |
 | Selected-weather stabilization and Force/contact safety | Implemented | Internal asymmetric confirmation based on each cover's selected states; enabled passage lockout prevents Force-close on open or unknown contact; regression tests |
 | Blueprint input_text helper and automation traces | Replaced | Integration-owned storage and structured event/condition history |
 | Lamella actuator tilt, tilt bands/waits/reposition | Excluded by user | No tilt service or tilt target is sent; tilted-window contact remains supported |

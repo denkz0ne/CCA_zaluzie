@@ -478,6 +478,55 @@ async def test_simulation_records_motor_command_without_calling_cover_service(ha
     assert any(event["type"] == "would_dispatch" for event in controller.simulation_history)
 
 
+async def test_contact_lockout_blocks_arbitrary_manual_descent_but_allows_one_close(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config.update(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    hass.states.async_set("binary_sensor.passage", "off")
+    now = dt_util.now().timestamp()
+    controller.runtime.contact_lockout_until = now + 600
+    controller.runtime.contact_closed_verified_at = now
+    before = len(calls)
+
+    with pytest.raises(OperationError, match="Ochrana po návrate"):
+        await controller.async_control("position", 20)
+    assert len(calls) == before
+
+    await controller.async_control("close")
+    assert len(calls) == before + 1
+    assert controller.runtime.contact_lockout_until is None
+    assert controller.runtime.contact_lockout_release_used is True
+    assert any(event["type"] == "contact_lockout_released" for event in controller.history)
+
+
+async def test_contact_lockout_close_bypass_requires_currently_closed_contact(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config.update(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    hass.states.async_set("binary_sensor.passage", "on")
+    now = dt_util.now().timestamp()
+    controller.runtime.contact_lockout_until = now + 600
+    controller.runtime.contact_closed_verified_at = now
+    before = len(calls)
+
+    with pytest.raises(OperationError, match="Ochrana po návrate"):
+        await controller.async_control("close")
+    assert len(calls) == before
+    assert controller.runtime.contact_lockout_until == now + 600
+
+
 async def test_simulated_motion_advances_only_the_virtual_position(hass, entry):
     config_entry, calls = entry
     controller = config_entry.runtime_data

@@ -599,10 +599,28 @@ class CoverController:
         async with self._eval_lock:
             old = self.decision
             was_manual = self.runtime.manual_since is not None
+            contact_state_before = (
+                self.runtime.last_window,
+                self.runtime.contact_lockout_until,
+                self.runtime.contact_closed_verified_at,
+                self.runtime.contact_lockout_release_used,
+                self.runtime.stable.get("contact.closed"),
+            )
             self.decision = evaluate(
                 self._effective_config(), self.runtime, self._snapshot_inputs(), dt_util.now()
             )
             decision = self.decision
+            contact_state_after = (
+                self.runtime.last_window,
+                self.runtime.contact_lockout_until,
+                self.runtime.contact_closed_verified_at,
+                self.runtime.contact_lockout_release_used,
+                self.runtime.stable.get("contact.closed"),
+            )
+            if contact_state_after != contact_state_before:
+                # Persist contact confirmation and lockout deadlines even when
+                # the user-facing decision signature did not change.
+                await self._persist()
             if self._starting and not self.config["startup_recovery"]:
                 hold_current(self.runtime, decision.target, decision.mode, explicit=True)
                 decision.inhibit = "startup_hold"
@@ -980,7 +998,11 @@ class CoverController:
                 "shadow": deepcopy(self.simulation_shadow),
             },
             "sensors": {
-                k: {"state": v.state, "attributes": v.attributes}
+                k: {
+                    "state": v.state,
+                    "changed_at": v.changed_at,
+                    "attributes": v.attributes,
+                }
                 for k, v in self._snapshot_inputs().entities.items()
             },
             "server_time": self.now(),
@@ -1172,6 +1194,44 @@ class CoverController:
             target = targets[action]
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
+            release_contact_lockout = False
+            lockout_active = bool(
+                self.config["contact_lockout_enabled"]
+                and self.runtime.contact_lockout_until is not None
+                and dt_util.now().timestamp() < self.runtime.contact_lockout_until
+            )
+            if lockout_active:
+                contact_reading = self._snapshot_inputs().get(self.config["window_open"])
+                contact = contact_reading.boolean()
+                closed_verified = (
+                    contact is False
+                    and self.runtime.contact_closed_verified_at is not None
+                    and contact_reading.changed_at <= self.runtime.contact_closed_verified_at
+                    and dt_util.now().timestamp()
+                    >= contact_reading.changed_at
+                    + self.config["contact_delay"]
+                    + self.config["contact_state_delay"]
+                )
+                if action == "close" and closed_verified:
+                    release_contact_lockout = True
+                else:
+                    _, current_position = self.observe()
+                    toward_close = (
+                        target == self.config["close_position"]
+                        if current_position is None
+                        else (target - current_position)
+                        * (
+                            1
+                            if self.config["open_position"] > self.config["close_position"]
+                            else -1
+                        )
+                        < -self.config["position_tolerance"]
+                    )
+                    if toward_close:
+                        raise OperationError(
+                            "Ochrana po návrate z otvoreného priechodu ešte trvá. "
+                            "Zatvorenie povoľ iba tlačidlom Zatvoriť pri potvrdenom zatvorenom kontakte."
+                        )
             if self.position_source == "drive_time":
                 if self.operations.lock.locked() or self.operations.resetting:
                     raise OperationError("Prebieha pohyb; pred ďalším povelom použi STOP")
@@ -1184,10 +1244,18 @@ class CoverController:
                 )
                 if not correction:
                     hold_current(self.runtime, self.decision.target, self.decision.mode)
-                self._spawn(self._manual_motion(target), background=True)
+                self._spawn(
+                    self._manual_motion(target, release_contact_lockout=release_contact_lockout),
+                    background=True,
+                )
                 await asyncio.sleep(0)
             else:
                 await self.operations.command(target, force=True)
+                if release_contact_lockout:
+                    self.runtime.contact_lockout_until = None
+                    self.runtime.contact_lockout_release_used = True
+                    self.runtime.contact_closed_verified_at = None
+                    await self.record("contact_lockout_released", {"target": target})
                 correction = mark_manual(
                     self.config, self.runtime, target, dt_util.now(), self._snapshot_inputs()
                 )
@@ -1215,9 +1283,15 @@ class CoverController:
         if action != "simulation_off":
             await self.async_evaluate()
 
-    async def _manual_motion(self, target) -> None:
+    async def _manual_motion(self, target, *, release_contact_lockout: bool = False) -> None:
         try:
             await self.operations.command(target, force=True)
+            if release_contact_lockout:
+                self.runtime.contact_lockout_until = None
+                self.runtime.contact_lockout_release_used = True
+                self.runtime.contact_closed_verified_at = None
+                await self.record("contact_lockout_released", {"target": target})
+                await self._persist()
         except OperationError as error:
             self.runtime.fault = str(error)
             await self.record("action_failed", {"target": target, "error": str(error)})

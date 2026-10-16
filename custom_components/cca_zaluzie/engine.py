@@ -9,6 +9,7 @@ from .model import Decision, Runtime, Snapshot
 _CORRECTION_LIMIT = 20
 _CORRECTION_EDIT_SECONDS = 120
 _MOVEMENT_MERGE_SECONDS = 30 * 60
+_POST_CLOSE_LOCKOUT_SECONDS = 30 * 60
 _WEATHER_ENTER_SECONDS = 2 * 60
 _WEATHER_EXIT_SECONDS = 25 * 60
 
@@ -669,11 +670,30 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             if value is not False:
                 rt.stable.pop(f"contact.{name}.release", None)
             delay = cfg["contact_delay"] + cfg["contact_state_delay"]
+            if field == "window_open":
+                if value is True:
+                    # A newly opened or unconfirmed passage always rearms protection.
+                    rt.contact_lockout_until = None
+                    rt.contact_closed_verified_at = None
+                    rt.contact_lockout_release_used = False
+                    rt.stable.pop("contact.closed", None)
+                elif value is False:
+                    closed_confirmed = stable("contact.closed", True, delay)
+                    if closed_confirmed:
+                        if rt.contact_closed_verified_at is None:
+                            rt.contact_closed_verified_at = ts
+                else:
+                    rt.contact_closed_verified_at = None
+                    rt.stable.pop("contact.closed", None)
+                # Opening must be quick; closing retains the stable legacy confirmation.
+                contact_delay = min(delay, 2) if value is True else delay
+            else:
+                contact_delay = delay
             if value is False and rt.last_window == name:
-                release = stable(f"contact.{name}.release", True, delay)
+                release = stable(f"contact.{name}.release", True, contact_delay)
                 if not release:
                     window = name
-            elif stable(f"contact.{name}", value, delay) is True:
+            elif stable(f"contact.{name}", value, contact_delay) is True:
                 window = name
             elif value is True:
                 contact_pending = True
@@ -687,14 +707,18 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                     "ventilate",
                     "Otvorený kontakt · ochranná poloha",
                 )
-            else:
+            elif not rt.shading:
                 target, mode, action, reason = (
                     cfg["vent_position"],
                     "ventilation",
                     "ventilate",
                     "Otvorený kontakt · vetracia poloha",
                 )
-            suppressed.extend(("schedule", "shading"))
+            else:
+                trace["contact.ventilation_deferred"] = "shading"
+                suppressed.append("ventilation")
+            if mode != "shading":
+                suppressed.extend(("schedule", "shading"))
         elif window == "tilted" and (not resident or cfg["resident_allow_vent"]):
             if rt.last_window == "open" and cfg["vent_keep_full_tilt"]:
                 rt.keep_full_tilt = True
@@ -717,6 +741,16 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         elif rt.last_window != "closed" and window == "closed":
             rt.keep_full_tilt = False
             rt.transition_action = action = "ventilate_end"
+            if (
+                previous_window == "open"
+                and cfg["contact_lockout_enabled"]
+                and cfg["window_open"]
+                and rt.contact_closed_verified_at is not None
+            ):
+                rt.contact_lockout_until = ts + _POST_CLOSE_LOCKOUT_SECONDS
+                rt.contact_lockout_release_used = False
+                deadlines.append(rt.contact_lockout_until)
+                trace["contact.lockout_started"] = ts
         if rt.last_window != window:
             if not any(f"schedule.{key}.trigger" in trace for key in ("open", "close")):
                 rt.manual_policy_action = "ventilate_end" if window == "closed" else "ventilate"
@@ -984,6 +1018,27 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         inhibit = "contact_unknown"
     if contact_pending and not force:
         inhibit = "contact_pending"
+    if rt.contact_lockout_until is not None:
+        if not cfg["contact_lockout_enabled"] or not cfg["window_open"]:
+            rt.contact_lockout_until = None
+        elif ts >= rt.contact_lockout_until:
+            trace["contact.lockout_expired"] = rt.contact_lockout_until
+            rt.contact_lockout_until = None
+        else:
+            remaining = rt.contact_lockout_until - ts
+            deadlines.append(rt.contact_lockout_until)
+            trace["contact.lockout_until"] = rt.contact_lockout_until
+            trace["contact.lockout_remaining"] = remaining
+            position = _position(cfg, snap)
+            toward_close = (
+                target == cfg["close_position"]
+                if position is None
+                else (target - position)
+                * (1 if cfg["open_position"] > cfg["close_position"] else -1)
+                < -cfg["position_tolerance"]
+            )
+            if cfg["contact_lockout_enabled"] and toward_close:
+                inhibit = "contact_lockout"
     if (
         cfg["ventilation_enabled"]
         and window == "tilted"

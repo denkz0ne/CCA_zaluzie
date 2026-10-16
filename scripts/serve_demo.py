@@ -72,7 +72,7 @@ for key, name, entity, position in [
         }
     )
 fixture = {
-    "version": "2026.12.1",
+    "version": "2026.12.3",
     "order": [c["entry_id"] for c in controllers],
     "order_revision": 0,
     "groups": module.GROUPS,

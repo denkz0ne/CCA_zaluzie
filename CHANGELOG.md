@@ -1,3 +1,14 @@
+# 2026.12.3
+
+- Add a persisted 30-minute post-close safety lockout for enabled passage contacts.
+- Limit open-contact confirmation to 2 seconds while retaining stable close confirmation.
+- Rearm the lockout when the contact opens and leave lockout-off ventilation unchanged.
+- Allow one explicit manual Close action to release the lockout only after current,
+  stable contact closure; block slider and Force-driven descent during protection.
+- Show remaining protection time and deferred close as the next planned action.
+- Keep active shading when an ordinary contact opens without lockout; preserve serialized phases.
+- Update issue #13 behavior, compatibility and current-version documentation.
+
 # 2026.12.2
 
 - Keep correction edits within ±20 percentage points of the original mode target

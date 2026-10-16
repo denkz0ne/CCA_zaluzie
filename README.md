@@ -6,7 +6,7 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-The installable integration is version **2026.12.2**, for Home Assistant
+The installable integration is version **2026.12.3**, for Home Assistant
 **2026.9.0+**. The minimum is 2026.9; CI checks both the minimum release line
 and the current release. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
@@ -45,11 +45,15 @@ Unknown future inputs remain clearly marked as assumptions. History shows
 measured positions with unavailable intervals left as gaps; simulated/estimated
 positions are distinct. Simulation controls are in settings.
 
-Morning/evening use Early/Late windows and optional workday/calendar/sensor
-conditions. Sun shading moves the whole cover to a partial vertical position.
-Open/tilted window contacts, resident state, manual protection, Force and pause
-remain separate layers. If several Force requests are active, the most recently
-activated wins. Pause inhibits all movement dispatch, including Force.
+Morning/evening use Early/Late windows, solar height and workday/free-day rules.
+Legacy calendar and brightness schedule fields are migrated but no longer control
+day/night. Shading moves the whole cover vertically and keeps its configured
+weather selection and optional lux/temperature inputs. Contact protection,
+ventilation, resident state, manual handling, Force and pause remain separate
+layers. Issue #13 mechanics and their safety rules are documented in
+[Control engine](docs/CONTROL_ENGINE.md). If several Force requests are active,
+the most recently activated wins, except that an enabled passage lockout blocks
+Force-close. Pause inhibits all movement dispatch, including Force.
 
 Startup and unavailable-device recovery are **off by default**. Explicit
 **Prepočítať cieľ** allows reconciliation; settings can enable automatic recovery.
@@ -74,6 +78,7 @@ silently restarts after HA restarts.
 
 - [Panel operation, ordering and bulk editing](docs/PANEL.md)
 - [Feature mapping and implementation decisions](docs/FEATURE_MATRIX.md)
+- [Current control-engine behavior and migration](docs/CONTROL_ENGINE.md)
 - [Integration icon and HA brand assets](docs/BRANDING.md)
 - [Behavior reference](docs/CCA_REFERENCE.md)
 - [Architecture and release acceptance](docs/superpowers/specs/2026-10-11-integration-design.md)

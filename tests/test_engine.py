@@ -149,6 +149,27 @@ def test_active_shading_finishes_before_tilted_contact_starts_ventilation():
     assert decision.target == cfg["shade_position"]
 
 
+def test_active_shading_is_not_replaced_by_ordinary_open_contact():
+    cfg = shade_config(
+        ventilation_enabled=True,
+        window_open="binary_sensor.window",
+        contact_lockout_enabled=False,
+        shade_start_delay=0,
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime(shading=True)
+    decision = evaluate(
+        cfg,
+        rt,
+        shaded_world(**{"binary_sensor.window": Reading("on")}),
+        NOW.replace(hour=12),
+    )
+    assert decision.mode == "shading"
+    assert decision.target == cfg["shade_position"]
+    assert decision.conditions["contact.ventilation_deferred"] == "shading"
+
+
 def test_active_ventilation_finishes_before_shading_starts():
     cfg = shade_config(
         ventilation_enabled=True,
@@ -435,6 +456,57 @@ def test_passage_contact_lockout_prevents_force_close():
     assert "force_close" in decision.suppressed
 
 
+def test_single_contact_opening_uses_fast_confirmation_even_with_legacy_delay():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=60,
+        contact_state_delay=60,
+    )
+    rt = Runtime()
+    opened = world(**{"binary_sensor.passage": Reading("on")})
+    pending = evaluate(cfg, rt, opened, NOW)
+    assert pending.next_at == (NOW + timedelta(seconds=2)).timestamp()
+    confirmed = evaluate(cfg, rt, opened, NOW + timedelta(seconds=2))
+    assert confirmed.mode == "window_lockout"
+
+
+def test_closed_contact_keeps_the_robust_legacy_confirmation_delay():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=60,
+        contact_state_delay=60,
+    )
+    rt = Runtime()
+    opened = world(**{"binary_sensor.passage": Reading("on")})
+    evaluate(cfg, rt, opened, NOW)
+    evaluate(cfg, rt, opened, NOW + timedelta(seconds=2))
+    closed = world(**{"binary_sensor.passage": Reading("off")})
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=10))
+    assert rt.contact_lockout_until is None
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=129))
+    assert rt.contact_lockout_until is None
+    evaluate(cfg, rt, closed, NOW + timedelta(seconds=130))
+    assert rt.contact_lockout_until == (NOW + timedelta(seconds=1930)).timestamp()
+
+
+def test_contact_lockout_off_never_starts_post_close_protection():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=False,
+        window_open="binary_sensor.window",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime()
+    evaluate(cfg, rt, world(**{"binary_sensor.window": Reading("on")}), NOW)
+    evaluate(cfg, rt, world(**{"binary_sensor.window": Reading("off")}), NOW + timedelta(minutes=1))
+    assert rt.contact_lockout_until is None
+
+
 def test_unknown_passage_contact_blocks_force_close():
     cfg = config(
         ventilation_enabled=True,
@@ -532,6 +604,67 @@ def test_unknown_contact_inhibits_close():
         cfg, Runtime(), world(**{"binary_sensor.window": Reading("unknown")}), NOW.replace(hour=22)
     )
     assert d.inhibit == "contact_unknown"
+
+
+def test_passage_rearms_persisted_post_close_lockout_and_expires():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime()
+    start = NOW.replace(hour=22)
+    opened = world(**{"binary_sensor.passage": Reading("on")})
+    assert evaluate(cfg, rt, opened, start).mode == "window_lockout"
+
+    closed = world(**{"binary_sensor.passage": Reading("off")})
+    before = evaluate(cfg, rt, closed, start + timedelta(minutes=5))
+    assert rt.contact_lockout_until == (start + timedelta(minutes=35)).timestamp()
+    assert before.inhibit == "contact_lockout"
+    assert before.next_at == rt.contact_lockout_until
+
+    still_locked = evaluate(cfg, rt, closed, start + timedelta(minutes=34, seconds=59))
+    assert still_locked.inhibit == "contact_lockout"
+    expired = evaluate(cfg, rt, closed, start + timedelta(minutes=35))
+    assert expired.inhibit != "contact_lockout"
+
+
+def test_reopening_passage_resets_post_close_protection_and_unknown_is_safe():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime(last_window="open", contact_lockout_until=(NOW + timedelta(minutes=20)).timestamp())
+    reopened = world(**{"binary_sensor.passage": Reading("on")})
+    evaluate(cfg, rt, reopened, NOW)
+    assert rt.contact_lockout_until is None
+
+    unknown = world(**{"binary_sensor.passage": Reading("unavailable")})
+    decision = evaluate(cfg, rt, unknown, NOW + timedelta(seconds=1))
+    assert decision.inhibit == "contact_unknown"
+
+
+def test_runtime_migration_defaults_contact_lockout_state():
+    restored = Runtime.from_dict({"last_window": "open", "manual_since": NOW.timestamp()})
+    assert restored.contact_lockout_until is None
+    assert restored.contact_closed_verified_at is None
+
+
+def test_post_close_lockout_round_trips_in_persisted_runtime():
+    rt = Runtime(
+        contact_lockout_until=NOW.timestamp() + 1800,
+        contact_closed_verified_at=NOW.timestamp(),
+        contact_lockout_release_used=True,
+    )
+    restored = Runtime.from_dict(rt.to_dict())
+    assert restored.contact_lockout_until == rt.contact_lockout_until
+    assert restored.contact_closed_verified_at == rt.contact_closed_verified_at
+    assert restored.contact_lockout_release_used is True
 
 
 def test_tilted_window_keeps_scheduled_open_and_floors_close():
