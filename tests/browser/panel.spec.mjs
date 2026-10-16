@@ -54,7 +54,7 @@ test("live snapshots patch the panel without replacing focused controls or dialo
   await page.getByRole("button", { name: "Prehľad", exact: true }).click();
   await page.locator("[data-event]").first().click();
   await expect(page.locator("dialog")).toBeVisible();
-  const details = await page.locator("dialog .dialog-body").innerText();
+  const details = await page.locator("dialog .dialog-body").textContent();
   expect(details.trim().length).toBeGreaterThan(0);
   await page.evaluate(() => {
     const controller = structuredClone(window.fixture.controllers[1]);
@@ -91,7 +91,7 @@ test("server clock-only snapshots do not trigger a redundant panel render", asyn
     .toBe(0);
 });
 
-test("live history updates add correctly namespaced SVG measurement points", async ({
+test("live history updates preserve an SVG line without measurement dots", async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -103,11 +103,12 @@ test("live history updates add correctly namespaced SVG measurement points", asy
     ];
     window.publish({ controller });
   });
-  await expect(page.locator('circle[data-point-position="42"]')).toHaveCount(1);
+  await expect(page.locator(".measured-line")).toHaveAttribute("d", /L/);
+  await expect(page.locator("circle[data-measurement]")).toHaveCount(0);
   await expect
     .poll(() =>
       page
-        .locator("circle[data-measurement]")
+        .locator(".measured-line")
         .evaluateAll((nodes) =>
           nodes.every(
             (node) => node.namespaceURI === "http://www.w3.org/2000/svg",
@@ -240,10 +241,13 @@ test("touch long press adds a second cover to the multi-selection", async ({
   );
 });
 
-test("history period is selectable", async ({ page }) => {
-  await page.getByLabel("Obdobie histórie").selectOption("6");
+test("history is fixed at 24 hours without graph controls", async ({
+  page,
+}) => {
+  await expect(page.getByLabel("Obdobie histórie")).toHaveCount(0);
+  await expect(page.locator(".history-period")).toHaveText("24 hodín");
   await expect(
-    page.getByRole("heading", { name: "História polohy a režimov" }),
+    page.getByRole("heading", { name: "História polohy" }),
   ).toBeVisible();
 });
 

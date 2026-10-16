@@ -1074,7 +1074,7 @@ class CoverController:
 
     async def async_panel_history(self, hours: int = 24) -> dict[str, Any]:
         """Return measured history with optional real Recorder samples, without writes."""
-        from .panel_history import async_recorder_points
+        from .panel_history import async_recorder_points, solar_history
 
         now = dt_util.utcnow()
         result = self._measured_history.read(hours, now, self.history)
@@ -1085,6 +1085,14 @@ class CoverController:
         points = {point["at"]: point for point in recorded}
         points.update({point["at"]: point for point in result["points"]})
         result["points"] = sorted(points.values(), key=lambda point: point["at"])[-20000:]
+        result["time_zone"] = self.hass.config.time_zone
+        result["solar"] = await self.hass.async_add_executor_job(
+            solar_history,
+            now - timedelta(hours=hours),
+            now,
+            self.hass.config.latitude,
+            self.hass.config.longitude,
+        )
         return result
 
     async def async_predict(

@@ -42,6 +42,8 @@
             return structuredClone(window.fixture);
           if (msg.type === "cca_zaluzie/history")
             return {
+              solar: window.fixture.solar,
+              time_zone: "Europe/Bratislava",
               points: [
                 {
                   at: new Date(

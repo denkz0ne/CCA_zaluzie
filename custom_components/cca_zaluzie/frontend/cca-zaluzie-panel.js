@@ -1,5 +1,11 @@
 /* Live HA panel: the controller API owns validation, persistence and motor execution. */
 import { iconPath } from "./icons.js";
+const { historyChart, mergedEvents, usefulEvents } = await import(
+  new URL(
+    `./history-view.js${new URL(import.meta.url).search}`,
+    import.meta.url,
+  )
+);
 const esc = (v) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -440,10 +446,14 @@ export class CCAZaluziePanel extends HTMLElement {
       this._countdown();
       this._loadPrediction();
     }, 1000);
+    this._historyRefresh = setInterval(() => {
+      if (this._view === "overview" && this._connection) this._loadHistory();
+    }, 300000);
     if (this.hass) this._connect();
   }
   disconnectedCallback() {
     clearInterval(this._clock);
+    clearInterval(this._historyRefresh);
     clearTimeout(this._toastTimer);
     this._unsubscribe?.();
     this._unsubscribe = null;
@@ -1077,7 +1087,9 @@ export class CCAZaluziePanel extends HTMLElement {
     }
   }
   _historyBlock(c) {
-    const h = this._history.get(`${c.entry_id}:${this._historyHours}`);
+    const h = this._history.get(`${c.entry_id}:24`);
+    const end = Math.max(stamp(h?.end || Date.now() / 1000), Date.now()),
+      start = end - 24 * 3600000;
     const points = [
       ...new Map(
         [...(h?.points || []), ...(c.position_history || [])].map((p) => [
@@ -1086,81 +1098,58 @@ export class CCAZaluziePanel extends HTMLElement {
         ]),
       ).values(),
     ].sort((a, b) => stamp(a.at) - stamp(b.at));
-    const start = stamp(
-        h?.start || Date.now() / 1000 - this._historyHours * 3600,
-      ),
-      end = Math.max(stamp(h?.end || Date.now() / 1000), Date.now());
-    let path = "",
-      markers = "",
-      last = null,
-      hasGap = false;
-    for (const p of points) {
-      if (stamp(p.at) < start || stamp(p.at) > end) continue;
-      if (p.position == null || !p.available) {
-        last = null;
-        hasGap = true;
-        continue;
-      }
-      const x =
-          50 +
-          Math.max(0, Math.min(1, (stamp(p.at) - start) / (end - start))) * 900,
-        y = 135 - p.position * 1.1;
-      path += last ? ` H ${x} V ${y}` : ` M ${x} ${y}`;
-      markers += `<circle data-measurement tabindex="0" role="button" cx="${x}" cy="${y}" r="4" fill="var(--primary)" aria-label="${new Date(p.at).toLocaleString("sk-SK")} · ${esc(p.position)} %" data-point-at="${esc(p.at)}" data-point-position="${esc(p.position)}"><title>${new Date(p.at).toLocaleString("sk-SK")} · ${esc(p.position)} %</title></circle>`;
-      last = p;
-    }
-    const allEvents = [
-      ...new Map(
-        [...(h?.events || []), ...(c.events || [])].map((e) => [e.id, e]),
-      ).values(),
-    ]
-      .filter((e) => stamp(e.at) >= start && stamp(e.at) <= end)
-      .sort((a, b) => stamp(a.at) - stamp(b.at));
-    const events = allEvents.filter((e) => !e.simulated),
-      simulated = allEvents.filter((e) => e.simulated);
-    return `<section class="card"><div class="history-head"><h3>História polohy a režimov</h3><select data-history aria-label="Obdobie histórie" title="Zobraziť skutočne nameranú históriu za zvolené obdobie">${[6, 24, 168].map((n) => `<option value="${n}" ${n === this._historyHours ? "selected" : ""}>${n === 168 ? "7 dní" : `${n} hodín`}</option>`).join("")}</select></div><div class="chart"><svg viewBox="0 0 1000 165" role="img" aria-label="Nameraná poloha od 0 do 100 percent; neznáme hodnoty prerušujú čiaru"><text x="2" y="28">100 %</text><text x="2" y="138">0 %</text><path d="M50 25H950 M50 80H950 M50 135H950" stroke="var(--line)" fill="none"/><path d="${path}" stroke="var(--primary)" stroke-width="3" fill="none"/>${markers}<text x="50" y="160">${new Date(start).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</text><text x="830" y="160">${new Date(end).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</text></svg>${h?.error ? `<p class="history-gap">História nie je dostupná: ${esc(h.error)}</p>` : !points.length ? '<p class="history-gap">Zatiaľ nie sú dostupné namerané údaje.</p>' : hasGap ? '<p class="history-gap">Medzera v meraní · neznáma alebo nedostupná poloha.</p>' : ""}</div><div class="legend"><span><i class="dot"></i>Nameraná poloha</span><span>Medzera = chýbajúce meranie</span></div>${this._recordedTracks(events, points, start, end)}<div class="history-events">${
-      events
-        .slice(-50)
-        .reverse()
-        .map(
-          (e) =>
-            `<button class="event-row" data-event="${esc(e.id)}" title="Zobraziť čas, typ a dôvod zaznamenanej udalosti"><small>${clock(e.at)}</small><span class="event-copy">${esc(this._eventLabel(e.type, e.details?.mode, e.details?.phase))}${e.simulated ? " · SIMULOVANÉ" : ""}<small>${esc(e.details?.reason || e.details?.error || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
-        )
-        .join("") || '<p class="empty-state">Zatiaľ bez udalostí.</p>'
-    }</div>${this._simulationTrace(simulated)}</section>`;
+    const events = usefulEvents(mergedEvents(c, h));
+    return `<section class="card simple-history"><div class="history-head"><h3>História polohy</h3><span class="history-period">24 hodín</span></div><div class="simple-legend"><span><i class="history-swatch cover"></i>Žalúzia</span><span><i class="history-swatch day"></i>Deň <i class="history-swatch night"></i>Noc</span></div>${historyChart(c, h, start, end, points)}</section><section class="card useful-history"><div class="history-head"><div><h3>Udalosti <span class="history-count">Posledných 20</span></h3><p>Pohyby, zmeny režimu a ochrany</p></div><span class="history-clean">Bez opakovaných prepočtov</span></div><div class="history-events">${events.map((e) => this._historyEventRow(e)).join("") || '<p class="empty-state">Zatiaľ bez udalostí.</p>'}</div><div class="history-footer"><span>Bežné vyhodnocovanie zostáva v úplnom zázname.</span>${button("Zobraziť úplný záznam a detaily →", "data-all-events", "Zobraziť všetky dostupné uložené udalosti vrátane technických vyhodnotení a simulácie.", "link")}</div></section>`;
   }
-  _recordedTracks(events, points, start, end) {
-    const tracks = [
-      ["modes", "Režimy", (e) => Boolean(e.details?.mode)],
-      [
-        "manual",
-        "Manuálne ovládanie",
-        (e) => e.type.includes("manual") || e.details?.inhibit === "manual",
-      ],
-      [
-        "blocks",
-        "Blokácie a pauza",
-        (e) => Boolean(e.details?.inhibit) && e.details.inhibit !== "manual",
-      ],
-    ];
-    return `<div class="recorded-tracks"><p class="field-hint">Zaznamenané udalosti · značky ukazujú potvrdené časy, bez odhadu trvania režimu.</p>${tracks
-      .map(([id, label, filter]) => {
-        const subset = events.filter(filter);
-        return `<div class="recorded-track" data-track="${id}"><span>${label}</span><div class="mode-track">${subset.map((e) => `<button class="mode-dot" data-event="${esc(e.id)}" style="left:${Math.max(1, Math.min(99, ((stamp(e.at) - start) / (end - start)) * 100))}%" title="${clock(e.at)} · ${esc(this._eventLabel(e.type, e.details?.mode, e.details?.phase))} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || e.details?.reason || "")}" aria-label="${label} · ${clock(e.at)} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || this._eventLabel(e.type, e.details?.mode, e.details?.phase))}">●</button>`).join("") || "<small>Bez zaznamenanej udalosti</small>"}</div></div>`;
-      })
-      .join(
-        "",
-      )}<div class="recorded-track" data-track="availability"><span>Nedostupnosť</span><div class="mode-track">${
-      points
-        .filter(
-          (p) => !p.available && stamp(p.at) >= start && stamp(p.at) <= end,
-        )
-        .map(
-          (p) =>
-            `<button class="mode-dot" data-measurement data-point-at="${esc(p.at)}" data-point-position="neznáma" style="left:${Math.max(1, Math.min(99, ((stamp(p.at) - start) / (end - start)) * 100))}%" title="${clock(p.at)} · Nedostupná poloha" aria-label="Nedostupná poloha · ${clock(p.at)}">×</button>`,
-        )
-        .join("") || "<small>Bez zaznamenanej nedostupnosti</small>"
-    }</div></div></div>`;
+  _historyEventRow(e, full = false) {
+    const d = e.details || {},
+      label = e.overviewLabel
+        ? d.inhibit
+          ? inhibits[d.inhibit] || e.overviewLabel
+          : modes[d.mode] || e.overviewLabel
+        : this._eventLabel(e.type, d.mode, d.phase);
+    const symbol = /failed|interrupted/.test(e.type)
+      ? "!"
+      : d.inhibit
+        ? "◇"
+        : /manual/.test(e.type)
+          ? "↔"
+          : d.mode === "shading" || d.phase?.startsWith("shade")
+            ? "☀"
+            : d.target != null
+              ? "↕"
+              : "◷";
+    const zone = this._history.get(`${this._selected}:24`)?.time_zone;
+    const at = new Date(e.at),
+      options = {
+        hour: "2-digit",
+        minute: "2-digit",
+        ...(zone ? { timeZone: zone } : {}),
+      };
+    const sameDay =
+      at.toLocaleDateString("sk-SK", zone ? { timeZone: zone } : {}) ===
+      new Date().toLocaleDateString("sk-SK", zone ? { timeZone: zone } : {});
+    const when = at.toLocaleString(
+      "sk-SK",
+      full || !sameDay
+        ? { ...options, day: "numeric", month: "numeric" }
+        : options,
+    );
+    return `<button class="event-row" data-event="${esc(e.id)}" title="Zobraziť čas, dôvod a podrobnosti udalosti"><small>${esc(when)}</small><span class="history-event-icon" aria-hidden="true">${symbol}</span><span class="event-copy"><strong>${esc(label)}${e.simulated ? " · SIMULOVANÉ" : ""}</strong><small>${esc(d.error || d.reason || "")}</small></span><b>${d.position != null ? `${esc(d.position)} %` : d.target != null ? `Cieľ ${esc(d.target)} %` : ""}</b><span class="history-chevron" aria-hidden="true">›</span></button>`;
+  }
+  _allHistory(c) {
+    const h = this._history.get(`${c.entry_id}:24`),
+      events = mergedEvents(c, h);
+    this._dialog(
+      "Úplný záznam · " + c.name,
+      `<p>Všetky dostupné uložené udalosti vrátane technických vyhodnotení. Rozsah závisí od nastavenej doby uchovávania a limitu záznamov.</p><div class="complete-history">${
+        events
+          .filter((e) => !e.simulated)
+          .reverse()
+          .map((e) => this._historyEventRow(e, true))
+          .join("") || '<p class="empty-state">Zatiaľ bez udalostí.</p>'
+      }</div>${this._simulationTrace(events.filter((e) => e.simulated))}`,
+    );
   }
   _simulationTrace(events) {
     if (!events.length) return "";
@@ -1189,12 +1178,8 @@ export class CCAZaluziePanel extends HTMLElement {
       )
       .join("")}</select>${
       visible
-        .slice(-50)
         .reverse()
-        .map(
-          (e) =>
-            `<button class="event-row" data-event="${esc(e.id)}" title="Detail simulovanej udalosti"><small>${clock(e.at)}</small><span>${esc(this._eventLabel(e.type, e.details?.mode, e.details?.phase))} · SIMULOVANÉ<small>${esc(e.details?.error || e.details?.reason || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
-        )
+        .map((e) => this._historyEventRow(e, true))
         .join("") || "<p>Bez simulovaných udalostí tohto typu.</p>"
     }</details>`;
   }
@@ -1599,7 +1584,7 @@ export class CCAZaluziePanel extends HTMLElement {
     if (input.hasAttribute("data-simulation-filter")) {
       if (event.type === "change") {
         this._simulationFilter = input.value;
-        this._render();
+        this._allHistory(this._controllers.get(this._selected));
         this.shadowRoot.querySelector(".simulation-trace").open = true;
       }
       return;
@@ -1622,14 +1607,7 @@ export class CCAZaluziePanel extends HTMLElement {
       if (event.type === "change") this._toggleSelection(input.dataset.multi);
       return;
     }
-    if (input.hasAttribute("data-history")) {
-      if (event.type === "change") {
-        this._historyHours = Number(input.value);
-        this._render();
-        this._loadHistory();
-      }
-      return;
-    }
+
     if (input.dataset.durationUnit) {
       if (event.type === "change") {
         this._durationUnits ||= {};
@@ -1918,6 +1896,10 @@ export class CCAZaluziePanel extends HTMLElement {
       );
       return;
     }
+    if (b.hasAttribute("data-all-events")) {
+      this._allHistory(this._controllers.get(this._selected));
+      return;
+    }
     if (b.dataset.event) {
       const c = this._controllers.get(this._selected),
         h = this._history.get(`${this._selected}:${this._historyHours}`);
@@ -1927,7 +1909,7 @@ export class CCAZaluziePanel extends HTMLElement {
       if (e)
         this._dialog(
           this._eventLabel(e.type, e.details?.mode, e.details?.phase),
-          `<pre>${esc(JSON.stringify({ čas: e.at, ...e.details }, null, 2))}</pre>`,
+          `${button("← Úplný záznam", "data-all-events", "Vrátiť sa na zoznam všetkých dostupných udalostí.", "link")}<pre>${esc(JSON.stringify({ čas: e.at, typ: e.type, simulované: !!e.simulated, ...e.details }, null, 2))}</pre>`,
         );
       return;
     }

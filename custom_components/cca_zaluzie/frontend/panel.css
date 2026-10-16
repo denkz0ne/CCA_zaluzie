@@ -2138,3 +2138,191 @@ a {
     gap: 7px;
   }
 }
+
+/* Approved minimal day/night history: no points, controls or numerical scales. */
+.simple-history .history-head,
+.useful-history .history-head {
+  padding: 23px 25px 0;
+}
+.history-period {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.simple-legend {
+  display: flex;
+  gap: 23px;
+  padding: 19px 25px 0;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.simple-legend > span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.history-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+}
+.history-swatch.cover {
+  background: #009ac2;
+  height: 3px;
+}
+.history-swatch.day {
+  background: #e6b13b;
+}
+.history-swatch.night {
+  background: #6385bd;
+}
+.simple-chart {
+  padding: 5px 18px 9px;
+}
+.simple-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.simple-chart text {
+  fill: var(--secondary);
+  font-size: 11px;
+}
+.simple-chart .solar-caption {
+  font-size: 10px;
+}
+.solar-horizon {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.solar-crossing {
+  stroke: #c8d1d7;
+  stroke-width: 1;
+}
+.solar-day-fill {
+  fill: #f2bf48;
+  opacity: 0.26;
+}
+.solar-night-fill {
+  fill: #6888bf;
+  opacity: 0.24;
+}
+.solar-day-line {
+  fill: none;
+  stroke: #e6b13b;
+  stroke-width: 2;
+}
+.solar-night-line {
+  fill: none;
+  stroke: #6385bd;
+  stroke-width: 2;
+}
+.measured-line {
+  fill: none;
+  stroke: #009ac2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.useful-history {
+  margin-top: 22px;
+}
+.useful-history .history-head {
+  padding-bottom: 20px;
+}
+.useful-history h3 {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.history-count {
+  font-size: 12px;
+  font-weight: 400;
+  padding: 4px 9px;
+  background: var(--bg);
+  border-radius: 5px;
+  color: var(--secondary);
+}
+.useful-history .history-head p {
+  font-size: 13px;
+  color: var(--secondary);
+  margin: 7px 0 0;
+}
+.history-clean {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.useful-history .history-events {
+  max-height: 337px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.useful-history .event-row,
+.complete-history .event-row {
+  padding: 16px 25px;
+  gap: 15px;
+}
+.event-copy strong {
+  font-weight: 600;
+}
+.history-event-icon {
+  color: #009ac2;
+  font-size: 21px;
+  width: 25px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.history-chevron {
+  color: var(--secondary);
+  font-size: 21px;
+}
+.history-footer {
+  padding: 17px 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.history-footer .link {
+  font-size: 13px;
+}
+.complete-history {
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 700px) {
+  .simple-history .history-head,
+  .useful-history .history-head {
+    padding: 18px 16px 0;
+  }
+  .useful-history .history-head {
+    padding-bottom: 16px;
+  }
+  .simple-legend {
+    padding-left: 17px;
+  }
+  .history-clean,
+  .history-footer > span {
+    display: none;
+  }
+  .history-footer {
+    padding: 16px;
+  }
+  .useful-history .event-row,
+  .complete-history .event-row {
+    padding: 14px;
+    gap: 9px;
+  }
+  .event-row > b {
+    white-space: nowrap;
+  }
+  .history-count {
+    font-size: 10px;
+  }
+  .simple-chart {
+    padding: 5px 12px 9px;
+  }
+}

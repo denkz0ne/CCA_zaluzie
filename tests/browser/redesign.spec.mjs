@@ -71,17 +71,17 @@ test("ctrl selection keeps focus and bulk patches only explicitly edited allowli
 test("history reads actual endpoint, preserves gaps and overview requests a live prediction", async ({
   page,
 }) => {
-  await page.getByLabel("Obdobie histórie").selectOption("168");
+  await expect(page.getByLabel("Obdobie histórie")).toHaveCount(0);
   await expect
     .poll(() =>
       page.evaluate(() =>
         window.calls.some(
-          (c) => c.type === "cca_zaluzie/history" && c.hours === 168,
+          (c) => c.type === "cca_zaluzie/history" && c.hours === 24,
         ),
       ),
     )
     .toBe(true);
-  await expect(page.locator(".history-gap")).toBeVisible();
+  await expect(page.locator(".history-gap").first()).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -330,10 +330,8 @@ test("new measured position and event appear through live subscription", async (
   await expect(
     page.getByRole("button", { name: /Aktuálne meranie/ }),
   ).toBeVisible();
-  await expect(page.locator("svg [data-measurement]").last()).toHaveAttribute(
-    "aria-label",
-    /37 %/,
-  );
+  await expect(page.locator(".measured-line")).toHaveAttribute("d", /L/);
+  await expect(page.locator("svg circle")).toHaveCount(0);
   await page.getByRole("button", { name: /Aktuálne meranie/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("dialog")).toContainText("Aktuálne meranie");
@@ -476,7 +474,7 @@ test("native position slider and exact numeric control keep safety control contr
     )
     .toBe(32);
 });
-test("separate recorded mode tracks and simulation filter use actual event details", async ({
+test("complete history retains mode and protection events and filters simulation", async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -497,15 +495,13 @@ test("separate recorded mode tracks and simulation filter use actual event detai
       });
     window.publish({ controller: c });
   });
+  await expect(page.locator(".recorded-tracks")).toHaveCount(0);
   await expect(
-    page.locator('[data-track="modes"] [data-event="mode"]'),
+    page.locator('.useful-history [data-event="manual"]'),
   ).toBeVisible();
-  await expect(
-    page.locator('[data-track="manual"] [data-event="manual"]'),
-  ).toBeVisible();
-  await expect(
-    page.locator('[data-track="blocks"] [data-event="block"]'),
-  ).toBeVisible();
+  await page.locator("[data-all-events]").click();
+  await expect(page.locator('dialog [data-event="mode"]')).toBeVisible();
+  await expect(page.locator('dialog [data-event="block"]')).toBeVisible();
   await page.locator(".simulation-trace summary").click();
   await page.getByLabel("Filtrovať simuláciu").selectOption("errors");
   await expect(page.locator(".simulation-trace")).toContainText(

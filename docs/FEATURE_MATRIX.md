@@ -1,4 +1,4 @@
-# Feature mapping — 2026.12.6
+# Feature mapping — 2026.12.7
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,

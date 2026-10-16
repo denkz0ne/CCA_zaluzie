@@ -13,6 +13,28 @@ from .presentation import MeasuredHistory
 _LOGGER = logging.getLogger(__name__)
 
 
+def solar_history(start: datetime, end: datetime, latitude: float, longitude: float) -> list[dict]:
+    """Historical solar geometry only, independent of the controller's decisions."""
+    from astral import Observer
+    from astral.sun import elevation
+
+    observer = Observer(latitude=latitude, longitude=longitude)
+    points = []
+    moment = start
+    while True:
+        height = elevation(observer, moment)
+        if points and points[-1]["elevation"] * height < 0:
+            previous = points[-1]
+            earlier = datetime.fromisoformat(previous["at"])
+            fraction = -previous["elevation"] / (height - previous["elevation"])
+            crossing = earlier + (moment - earlier) * fraction
+            points.append({"at": crossing.isoformat(), "elevation": 0})
+        points.append({"at": moment.isoformat(), "elevation": round(height, 4)})
+        if moment == end:
+            return points
+        moment = min(moment + timedelta(minutes=5), end)
+
+
 def recorder_points(config: dict, states: dict) -> list[dict]:
     """Convert physical HA states only, retaining unknown feedback as gaps."""
     if config["position_source"] == "drive_time" and not config.get("position_source_auto"):
