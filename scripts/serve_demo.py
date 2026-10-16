@@ -72,7 +72,7 @@ for key, name, entity, position in [
         }
     )
 fixture = {
-    "version": "2026.12.3",
+    "version": json.loads((root / "custom_components/cca_zaluzie/manifest.json").read_text())["version"],
     "order": [c["entry_id"] for c in controllers],
     "order_revision": 0,
     "groups": module.GROUPS,

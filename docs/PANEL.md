@@ -26,9 +26,23 @@ zostanú zachované. Zoznam používa menšie karty a úchyt na hornej hrane; po
 možno meniť potiahnutím alebo klávesmi hore/dole, Home a End. Ctrl/Cmd-kliknutie
 vyberie viac položiek; na dotykovom zariadení podrž kartu približne pol sekundy.
 
-Jednorazové začatie a ukončenie tienenia či vetrania je pri hlavných tlačidlách
-otvorenia, zastavenia a zatvorenia. Jednorazové presunutie do tieniacej alebo
-vetracej polohy zostáva medzi ďalšími akciami.
+Pod posuvníkom je sekcia **Jednorazové zmeny režimov**. Tienenie aj vetranie
+majú vlastnú dvojicu tlačidiel s ikonou a stavom. **Spustiť teraz** posunie
+začiatok aktuálneho režimu; pôvodný začiatok sa už nezopakuje. **Ukončiť**
+posunie jeho koniec. Ukončené tienenie sa pri rovnakých podmienkach dnes
+nespustí znova; ďalší deň má bežný plán. Ukončené vetranie sa neobnoví pri
+rovnakom stave kontaktu, ale nový cyklus okna môže spustiť ďalšie vetranie.
+Aktívny režim dobehne pred začiatkom druhého. Bezpečnostná ochrana priechodu
+má naďalej prednosť. Tieto akcie nenastavujú trvalý Force prepínač.
+
+Vypnuté režimy zostávajú viditeľné s neaktívnymi tlačidlami a dôvodom
+**Vypnuté v konfigurácii**. Jednorazové presunutie iba do tieniacej alebo
+vetracej polohy je samostatná sekundárna akcia pod históriou.
+
+Od verzie 2026.12.5 sa štýly načítajú pod rovnakou verziou ako panel. Browser
+preto po aktualizácii nepoužije staré pravidlá úchytu s novým obsahom kariet.
+Prichádzajúce percentá nemenia rozpracovanú hodnotu zameraného posuvníka.
+Predikcia sa obnoví pri zmene režimu alebo ochrany, nie pri každom percente jazdy.
 
 Keď je zapnutá ochrana kontaktu, otvorenie kontaktu po najviac dvojsekundovom
 potvrdení presunie žalúziu do ochrannej polohy. Po potvrdenom zatvorení kontaktu

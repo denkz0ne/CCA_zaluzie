@@ -1742,15 +1742,79 @@ dialog::backdrop {
   color: var(--warning, #b26a00);
 }
 .phase-controls {
-  grid-column: 1 / -1;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.phase-heading h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.phase-heading p,
+.phase-inhibit {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--secondary);
+}
+.phase-state {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.phase-status {
+  color: var(--secondary);
+  font-size: 11px;
+  text-align: right;
+}
+.phase-status.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+.phase-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-.motor.phase-action {
-  min-height: 42px;
-  padding: 8px 12px;
+.phase-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--primary);
   font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.phase-action svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+.phase-end {
+  background: var(--card);
+  color: var(--text);
+}
+.phase-action:hover:enabled {
+  border-color: var(--primary);
+}
+.phase-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.phase-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .position-number {
   font-size: 44px;

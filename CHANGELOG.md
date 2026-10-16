@@ -1,3 +1,20 @@
+# 2026.12.5
+
+- Fix upgrade rendering: load the stylesheet with the panel module's release
+  version, preventing old full-height drag rules from clipping cover cards.
+- Add a visible one-shot mode section below the position slider, with paired
+  start/end buttons, icons, current phase status and explanatory tooltips for
+  shading and ventilation. Disabled features stay visible with a reason.
+- Preserve attributes owned by native HA controls and the user's focused slider
+  value and open event-detail contents during live updates; keep the insertion
+  marker while dragging a card.
+- Recalculate the next movement immediately after phase, mode or protection
+  changes without running a two-day prediction for every measured position update.
+- Clear active-motion presentation when device feedback becomes unavailable;
+  keep measured position separate from the requested target.
+- Reopen and correct the delivery gaps in issue #17; verify one-shot schedule
+  adoption, early phase end, next-day behavior and new ventilation cycles.
+
 # 2026.12.4
 
 - Keep the side panel's DOM nodes stable during live updates so focused controls,
