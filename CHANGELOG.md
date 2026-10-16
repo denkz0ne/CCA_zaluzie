@@ -1,11 +1,11 @@
-# 2026.12.5
-
-## 2026.12.6
+# 2026.12.6
 
 - Odstránené vyklopené okno vrátane šiestich nastavení a runtime vetiev; bezpečná migrácia schémy 1.3.
 - Ochrana priechodu má vlastnú viditeľnú sekciu s prepínačom a 30-minútovým vysvetlením.
 - Bežné vetranie zachováva korekcie a jednorazové ovládanie bez senzora vyklopenia.
 - Podrobnosti: [release 2026.12.6](docs/RELEASE_2026.12.6.md).
+
+# 2026.12.5
 
 - Fix upgrade rendering: load the stylesheet with the panel module's release
   version, preventing old full-height drag rules from clipping cover cards.
