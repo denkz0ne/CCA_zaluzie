@@ -1,3 +1,12 @@
+# 2026.12.7
+
+- Implement approved minimal 24-hour history: a plain measured-position line over a filled yellow day / blue night solar curve, sharing time and the horizon crossing.
+- Remove graph dots, scales, zoom, period controls and recorded mode dot tracks from the overview. Preserve unavailable gaps and native live UI stability.
+- Show the last 20 useful physical events, including actual changes of mode/protection; hide repeated evaluations and preparation noise from this summary.
+- Add complete retained event history with clickable details and a return link; keep technical evaluations and simulation available there without deleting records.
+- Compute solar geometry from HA location/timezone without changing cover decisions, configuration or storage. No sensor or new dependency is required.
+- Details: [release notes](docs/RELEASE_2026.12.7.md).
+
 # 2026.12.6
 
 - Odstránené vyklopené okno vrátane šiestich nastavení a runtime vetiev; bezpečná migrácia schémy 1.3.

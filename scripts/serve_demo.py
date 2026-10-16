@@ -2,8 +2,9 @@
 
 import importlib.util
 import json
+import math
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,7 +22,7 @@ sys.modules["cca_demo_config.config"] = module
 bulk = importlib.util.module_from_spec(bulk_spec)
 sys.modules[bulk_spec.name] = bulk
 bulk_spec.loader.exec_module(bulk)
-now = datetime.now(timezone.utc)
+now = datetime.now(UTC)
 controllers = []
 for key, name, entity, position in [
     ("one", "Obývačka · balkón", "cover.one", 58),
@@ -71,7 +72,21 @@ for key, name, entity, position in [
             "explanation": {"title":"Prečo je žalúzia v tejto polohe?", "summary":"Manuálne ovládanie zmenilo polohu. Automatika tento zásah rešpektuje do skončenia ochrany.", "details":["Aktívna ochrana manuálneho ovládania.","Návrat k automatickému cieľu je povolený."]},
         }
     )
-fixture = {
+# Illustrative geometry only: the isolated preview needs no HA dependencies.
+solar = []
+for i in range(289):
+    moment = now - timedelta(hours=24) + timedelta(minutes=5 * i)
+    hour = (moment.hour + moment.minute / 60 + 2) % 24
+    height = 38 * math.cos((hour - 12.5) * math.pi / 12) - 6
+    if solar and solar[-1]["elevation"] * height < 0:
+        previous = solar[-1]
+        earlier = datetime.fromisoformat(previous["at"])
+        crossing = earlier + (moment - earlier) * (-previous["elevation"] / (height - previous["elevation"]))
+        solar.append({"at": crossing.isoformat(), "elevation": 0})
+    solar.append({"at": moment.isoformat(), "elevation": height})
+
+fixture = {"solar": solar,
+
     "version": json.loads((root / "custom_components/cca_zaluzie/manifest.json").read_text())["version"],
     "order": [c["entry_id"] for c in controllers],
     "order_revision": 0,

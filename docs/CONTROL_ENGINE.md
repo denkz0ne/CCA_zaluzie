@@ -1,6 +1,6 @@
-# Riadenie žalúzií — verzia 2026.12.6
+# Riadenie žalúzií — verzia 2026.12.7
 
-Tento dokument opisuje správanie verzie **2026.12.6**. Každá žalúzia má vlastný
+Tento dokument opisuje správanie verzie **2026.12.7**. Každá žalúzia má vlastný
 stav a rozhodnutie. Automatizácia, prehľad najbližšieho pohybu aj simulácia
 vychádzajú z rovnakého rozhodovacieho jadra. Predikcia nemení stav ani neposiela
 povely; simulácia používa oddelený uložený stav a nevolá služby motora.
@@ -114,3 +114,26 @@ Starý runtime vyklopenia a jeho korekcia sa vyčistia; migrácia neposiela pove
 motoru. Pri ďalšom bežnom vyhodnotení platia aktuálne pravidlá automatizácie.
 Vetranie, jeho jednorazový štart/koniec, korekcie ±20 percentuálnych bodov počas
 120 sekúnd a bezpečnostné blokovanie Force pri otvorenom kontakte zostávajú.
+
+## História a udalosti — 2026.12.7
+
+Prehľad má jeden pevný graf za posledných 24 hodín, bez prepínačov, bodiek, zoomu
+a číselných stupníc. Tenká tyrkysová čiara zobrazuje výhradne namerané polohy.
+Neznáme polohy a nedostupnosť prerušia čiaru; cieľ ani simulácia nie sú meranie.
+Krivka slnka je vypočítaná z polohy HA v rovnakých časoch: žltá výplň nad
+horizontom, modrá pod ním. Výplne končia na spoločnej nulovej čiare. Výška
+krivky je orientačná; neporovnáva stupne s percentami žalúzie. Časová os je
+spoločná, rešpektuje časové pásmo HA a zmenu dňa aj letného času. Geometria
+slnka nevyžaduje nastavený senzor ani nemení žiadnu automatizačnú podmienku.
+
+Pod grafom je posledných 20 užitočných fyzických udalostí: motorové výsledky,
+odoslané povely, manuálne ovládanie, zmeny režimu a bezpečnostných blokácií,
+reset, chyby. Opakované vyhodnotenia s rovnakým režimom a blokáciou, samotný
+prepočet a príprava povelu prehľad nezahlcujú. Zmena režimu či blokácie sa
+zobrazí aj vtedy, keď jej zdrojom bolo vyhodnotenie. Záznamy sa nemažú.
+
+**Zobraziť úplný záznam a detaily →** otvorí všetky dostupné uložené udalosti
+vrátane technických vyhodnotení. Simulácia zostáva oddelená a má filter.
+Každá udalosť má detail s časom, typom a pôvodnými údajmi; odtiaľ sa dá
+vrátiť na úplný zoznam. Úplný znamená údaje uchované podľa nastavených
+limitov histórie, nie neobmedzený archív.
