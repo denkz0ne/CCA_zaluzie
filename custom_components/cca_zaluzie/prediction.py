@@ -17,7 +17,6 @@ from .model import Reading, Runtime, Snapshot
 _NON_PREDICTIVE = {
     "cover_entity",
     "sun_sensor",
-    "calendar_entity",
     "workday_sensor",
     "workday_tomorrow",
 }
@@ -145,15 +144,8 @@ def _assumed_snapshot(
             snapshot.entities[entity] = Reading(value, changed_at=moment.timestamp())
             assumptions.append(f"Budúca hodnota {entity} nie je známa.")
 
-    active = not runtime.shading
-    if config["lux_enabled"] and config["lux_sensor"]:
-        sensor = config["lux_sensor"]
-        threshold = config["lux_open"] if active else config["lux_close"]
-        number = threshold + 1 if active else max(0, threshold - 1)
-        snapshot.entities[sensor] = Reading(str(number), changed_at=moment.timestamp())
-        assumptions.append(f"Jas {sensor} je iba scenárový predpoklad.")
     if config["shading_enabled"]:
-        lux_sensor = config["shade_lux_sensor"] or config["lux_sensor"]
+        lux_sensor = config["shade_lux_sensor"]
         if lux_sensor:
             threshold = config["shade_lux_end"] if runtime.shading else config["shade_lux_start"]
             number = max(0, threshold - config["shade_lux_hysteresis"] - 1) if runtime.shading else threshold + config["shade_lux_hysteresis"] + 1

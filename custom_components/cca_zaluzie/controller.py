@@ -485,13 +485,22 @@ class CoverController:
             if external:
                 self.runtime.estimated_position = None
             if external and self.config["manual_enabled"]:
-                mark_manual(
+                correction = mark_manual(
                     self.config, self.runtime, position, dt_util.now(), self._snapshot_inputs()
                 )
                 await self.record(
-                    "manual_detected", {"position": position, "context_id": context.id}
+                    "manual_correction" if correction else "manual_detected",
+                    {
+                        "position": position,
+                        "context_id": context.id,
+                        "mode": self.runtime.correction_mode if correction else None,
+                        "base_target": self.runtime.correction_base_target if correction else None,
+                        "effective_target": self.runtime.correction_target if correction else None,
+                        "edit_until": self.runtime.correction_deadline if correction else None,
+                    },
                 )
-                await self._run_script("manual_after")
+                if not correction:
+                    await self._run_script("manual_after")
             if (
                 active_command
                 and position is not None
@@ -550,30 +559,7 @@ class CoverController:
         elif weather:
             self._forecast[weather] = None
             self._forecast_conditions[weather] = None
-        calendar = self.config["calendar_entity"]
-        if (
-            self.config["calendar_enabled"]
-            and calendar
-            and self.hass.services.has_service("calendar", "get_events")
-        ):
-            try:
-                response = await self.hass.services.async_call(
-                    "calendar",
-                    "get_events",
-                    {
-                        "entity_id": calendar,
-                        "start_date_time": dt_util.now()
-                        .replace(hour=0, minute=0, second=0, microsecond=0)
-                        .isoformat(),
-                        "end_date_time": (dt_util.now() + timedelta(days=8)).isoformat(),
-                    },
-                    blocking=True,
-                    return_response=True,
-                )
-                self._calendar = response.get(calendar, {}).get("events", [])
-            except Exception as error:
-                self._calendar = []
-                _LOGGER.warning("%s calendar unavailable: %s", self.entry.title, error)
+        self._calendar = []
         if self._active and not self._starting:
             await self.async_evaluate()
 
@@ -1114,7 +1100,19 @@ class CoverController:
             caller.id in self.contexts or caller.parent_id in self.contexts
         )
         if (
-            action in ("reset", "stop", "open", "close", "shade", "ventilate", "position")
+            action in (
+                "reset",
+                "stop",
+                "open",
+                "close",
+                "shade",
+                "ventilate",
+                "position",
+                "phase_shade_start",
+                "phase_shade_end",
+                "phase_vent_start",
+                "phase_vent_end",
+            )
             and self._dispatch_task
             and not self._dispatch_task.done()
             and not internal
@@ -1134,6 +1132,31 @@ class CoverController:
             await self.async_set_simulation(True)
         elif action == "simulation_off":
             await self.async_set_simulation(False)
+        elif action.startswith("phase_"):
+            phase_actions = {
+                "phase_shade_start": ("shade_start", "shading_enabled"),
+                "phase_shade_end": ("shade_end", "shading_enabled"),
+                "phase_vent_start": ("vent_start", "ventilation_enabled"),
+                "phase_vent_end": ("vent_end", "ventilation_enabled"),
+            }
+            phase, feature = phase_actions.get(action, (None, None))
+            if phase is None or not self.config[feature]:
+                raise OperationError("Táto režimová akcia nie je pre žalúziu zapnutá")
+            if action == "phase_shade_start" and self.runtime.shading:
+                raise OperationError("Tienenie už prebieha")
+            if action == "phase_shade_end" and not self.runtime.shading:
+                raise OperationError("Tienenie práve neprebieha")
+            today = dt_util.now().date().isoformat()
+            if phase == "shade_start":
+                self.runtime.phase_latches.pop("shade_end", None)
+            elif phase == "shade_end":
+                self.runtime.phase_latches.pop("shade_start", None)
+            elif phase == "vent_start":
+                self.runtime.phase_latches.pop("vent_end", None)
+            else:
+                self.runtime.phase_latches.pop("vent_start", None)
+            self.runtime.phase_latches[phase] = today
+            await self.record("phase_action", {"phase": phase, "day": today})
         elif action == "stop":
             await self.operations.stop()
             mark_manual(self.config, self.runtime, self.observe()[1], dt_util.now())
@@ -1156,18 +1179,20 @@ class CoverController:
                     raise OperationError("Žalúzia nie je dostupná")
                 if target not in (0, 100) and self.runtime.estimated_position is None:
                     raise OperationError("Pred čiastočnou polohou vykonaj reset polohy")
-                mark_manual(
+                correction = mark_manual(
                     self.config, self.runtime, target, dt_util.now(), self._snapshot_inputs()
                 )
-                hold_current(self.runtime, self.decision.target, self.decision.mode)
+                if not correction:
+                    hold_current(self.runtime, self.decision.target, self.decision.mode)
                 self._spawn(self._manual_motion(target), background=True)
                 await asyncio.sleep(0)
             else:
                 await self.operations.command(target, force=True)
-                mark_manual(
+                correction = mark_manual(
                     self.config, self.runtime, target, dt_util.now(), self._snapshot_inputs()
                 )
-                hold_current(self.runtime, self.decision.target, self.decision.mode)
+                if not correction:
+                    hold_current(self.runtime, self.decision.target, self.decision.mode)
             await self.record("manual_requested", {"target": target})
         elif action in ("clear_override", "reconcile"):
             self.runtime.manual_since = None

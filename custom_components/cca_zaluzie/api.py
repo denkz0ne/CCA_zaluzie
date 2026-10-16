@@ -116,6 +116,10 @@ def ws_get(hass, connection, msg):
                 "cancel_reset",
                 "simulation_on",
                 "simulation_off",
+                "phase_shade_start",
+                "phase_shade_end",
+                "phase_vent_start",
+                "phase_vent_end",
             ]
         ),
         vol.Optional("position"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),

@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.cca_zaluzie import async_migrate_entry
 from custom_components.cca_zaluzie.config import validate_config
 from custom_components.cca_zaluzie.const import DOMAIN
 from custom_components.cca_zaluzie.operations import OperationError
@@ -673,3 +674,33 @@ async def test_live_prediction_keeps_runtime_and_never_dispatches(hass, entry):
     assert calls == []
     assert controller.runtime.to_dict() == before_runtime
     assert controller.history == before_history
+
+
+async def test_config_entry_migration_retires_schedule_light_and_calendar_only(hass):
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test blind",
+        unique_id="cover.blind",
+        version=1,
+        minor_version=1,
+        data={"cover_entity": "cover.blind", "name": "Test blind", "morning_late": "08:15"},
+        options={
+            "calendar_enabled": True,
+            "calendar_entity": "calendar.old",
+            "lux_enabled": True,
+            "lux_sensor": "sensor.old_lux",
+            "shade_lux_sensor": "sensor.shade_lux",
+        },
+    )
+    config_entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, config_entry)
+
+    assert config_entry.minor_version == 2
+    assert config_entry.options == {}
+    assert config_entry.data["morning_late"] == "08:15"
+    assert config_entry.data["shade_lux_sensor"] == "sensor.shade_lux"
+    assert "calendar_entity" not in config_entry.data
+    assert "calendar_enabled" not in config_entry.data
+    assert "lux_enabled" not in config_entry.data
+    assert config_entry.data["cover_entity"] == "cover.blind"

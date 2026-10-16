@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import probatio as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -10,6 +12,8 @@ from homeassistant.helpers.service import async_register_admin_service
 
 from .const import DOMAIN, PLATFORMS
 from .controller import CoverController
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
@@ -120,7 +124,21 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if entry.version > 1:
+    from .config import ConfigError, validate_config
+
+    if entry.version != 1 or entry.minor_version > 2:
         return False
-    hass.config_entries.async_update_entry(entry, version=1, minor_version=1)
+    if entry.minor_version < 2:
+        try:
+            normalized = validate_config({**entry.data, **entry.options})
+        except ConfigError:
+            _LOGGER.exception("Cannot safely migrate CCA Žalúzie settings for %s", entry.entry_id)
+            return False
+        hass.config_entries.async_update_entry(
+            entry,
+            data=normalized,
+            options={},
+            version=1,
+            minor_version=2,
+        )
     return True

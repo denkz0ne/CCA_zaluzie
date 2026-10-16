@@ -54,6 +54,43 @@ test("shows cover state and the persistent automation list", async ({
   await expect(page.locator('[data-cover="two"]')).toBeVisible();
 });
 
+test("overview exposes one-shot phase controls and sends the matching action", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = window.fixture.controllers[0];
+    controller.config.shading_enabled = true;
+    controller.config.ventilation_enabled = true;
+    controller.runtime.shading = false;
+    controller.decision.mode = "idle";
+    window.publish({ controller });
+  });
+
+  await page.getByRole("button", { name: "Začať tienenie teraz" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (call) =>
+            call.type === "cca_zaluzie/control" &&
+            call.action === "phase_shade_start",
+        ),
+      ),
+    )
+    .toBe(true);
+
+  await page.evaluate(() => {
+    const controller = window.fixture.controllers[0];
+    controller.runtime.shading = true;
+    controller.decision.mode = "shading";
+    window.publish({ controller });
+  });
+  await expect(
+    page.getByRole("button", { name: "Ukončiť tienenie dnes" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Začať vetranie" })).toBeVisible();
+});
+
 test("retains separate drafts across covers and sections", async ({ page }) => {
   await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
   await page.getByLabel("Názov", { exact: true }).fill("Môj balkón");

@@ -1,3 +1,17 @@
+# 2026.12.2
+
+- Keep correction edits within ±20 percentage points of the original mode target
+  and 120 seconds from the first accepted edit; later edits do not extend the window.
+- Serialize active shading and ventilation phases, and merge a confirmed morning
+  opening with shading when the movement is due within the internal 30-minute interval.
+- Add one-shot start/end actions for shading and ventilation to the overview.
+- Give an enabled open-contact lockout priority over Force-close, including when
+  the contact state is unknown.
+- Stabilize weather changes against each cover's selected weather states.
+- Remove morning/evening lux and calendar decisions, migrate existing entries,
+  and preserve the legacy lux sensor as an optional shading input.
+- Preserve the Home Assistant 2026.9.0 minimum version.
+
 # 2026.12.1
 
 - Restore a live, read-only next-movement calculation in the cover overview.

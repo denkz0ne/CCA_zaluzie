@@ -14,6 +14,22 @@ def test_defaults_and_awning_direction():
     assert config["ventilation_enabled"] is False
 
 
+def test_legacy_morning_light_and_calendar_fields_migrate_without_becoming_active():
+    config = validate_config(
+        {
+            "cover_entity": "cover.blind",
+            "lux_enabled": True,
+            "lux_sensor": "sensor.lux",
+            "lux_open": 300,
+            "calendar_enabled": True,
+            "calendar_entity": "calendar.old",
+            "calendar_open_title": "work",
+        }
+    )
+    assert config["shade_lux_sensor"] == "sensor.lux"
+    assert not ({"lux_enabled", "lux_sensor", "calendar_enabled", "calendar_entity"} & config.keys())
+
+
 @pytest.mark.parametrize(
     "patch",
     [

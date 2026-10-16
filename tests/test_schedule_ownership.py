@@ -57,10 +57,10 @@ def test_evening_close_clears_shading_and_keeps_its_closing_action_owner():
     assert not rt.shading and rt.pending is None
 
 
-def test_pending_shading_holds_the_ordinary_opening_movement():
+def test_pending_shading_merges_with_the_morning_opening_movement():
     cfg = config(shading_enabled=True, shade_lux_sensor="sensor.lux", shade_start_delay=60)
     result = evaluate(cfg, Runtime(), shaded_world(), NOW)
-    assert result.pending == "shade_start" and result.inhibit == "pending_confirmation"
+    assert result.pending == "shade_start" and result.inhibit == "movement_merge"
 
 
 def test_resident_leave_does_not_open_when_wake_opening_is_disabled():

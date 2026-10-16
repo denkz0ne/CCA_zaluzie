@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 
 from .model import Decision, Runtime, Snapshot
 
-
-def _minutes(value: str) -> int:
-    hour, minute, *_ = value.split(":")
-    return int(hour) * 60 + int(minute)
+_CORRECTION_LIMIT = 20
+_CORRECTION_EDIT_SECONDS = 120
+_MOVEMENT_MERGE_SECONDS = 30 * 60
+_WEATHER_ENTER_SECONDS = 2 * 60
+_WEATHER_EXIT_SECONDS = 25 * 60
 
 
 def _at(now: datetime, value: str) -> datetime:
@@ -44,33 +45,11 @@ def _compare(number: float | None, threshold: float | None, up: bool) -> bool | 
     return number >= threshold if up else number <= threshold
 
 
-def _calendar_bounds(cfg, snap, now, action):
-    candidates = []
-    for event in snap.calendar_events:
-        if event.get("summary", "").casefold() != cfg[f"calendar_{action}_title"].casefold():
-            continue
-        try:
-            start = datetime.fromisoformat(event["start"])
-            end = datetime.fromisoformat(event.get("end", event["start"]))
-            if start.tzinfo is None:
-                start = start.replace(tzinfo=now.tzinfo)
-            if end.tzinfo is None:
-                end = end.replace(tzinfo=now.tzinfo)
-            if (
-                start.astimezone(now.tzinfo).date() == now.date()
-                and end.timestamp() >= start.timestamp()
-            ):
-                candidates.append((start.timestamp(), end.timestamp()))
-        except (ValueError, KeyError, TypeError):
-            continue
-    return min(candidates) if candidates else None
-
-
 def _predicate_configured(cfg, key):
     sources = {
         "azimuth": cfg["sun_sensor"],
         "elevation": cfg["sun_sensor"],
-        "brightness": cfg["shade_lux_sensor"] or cfg["lux_sensor"],
+        "brightness": cfg["shade_lux_sensor"],
         "temperature1": cfg["temperature_sensor1"],
         "temperature2": cfg["temperature_sensor2"],
         "forecast": cfg["forecast_temp_sensor"]
@@ -79,7 +58,37 @@ def _predicate_configured(cfg, key):
         "weather": cfg["forecast_entity"],
         "custom": cfg["shade_custom_sensor"],
     }
+    if key == "weather":
+        return bool(cfg["forecast_entity"] and cfg["shade_weather"])
     return bool(sources[key])
+
+
+def _stabilize_weather(rt: Runtime, selected: bool | None, ts: float, deadlines: list[float]):
+    if selected is None:
+        rt.weather_candidate = None
+        rt.weather_candidate_since = None
+        return rt.weather_selected
+    if rt.weather_selected is None:
+        rt.weather_selected = selected
+        rt.weather_candidate = None
+        rt.weather_candidate_since = None
+        return selected
+    if selected == rt.weather_selected:
+        rt.weather_candidate = None
+        rt.weather_candidate_since = None
+        return selected
+    if rt.weather_candidate != selected or rt.weather_candidate_since is None:
+        rt.weather_candidate = selected
+        rt.weather_candidate_since = ts
+    delay = _WEATHER_ENTER_SECONDS if selected else _WEATHER_EXIT_SECONDS
+    due = rt.weather_candidate_since + delay
+    if ts >= due:
+        rt.weather_selected = selected
+        rt.weather_candidate = None
+        rt.weather_candidate_since = None
+        return selected
+    deadlines.append(due)
+    return rt.weather_selected
 
 
 def _gate(snap, key, target, reason):
@@ -97,13 +106,17 @@ def _shade_candidate(cfg, rt, snap, phase):
             if cfg["shade_alt_entity"] and snap.get(cfg["shade_alt_entity"]).boolean() is True
             else cfg["shade_position"]
         )
-    target = cfg["vent_position"] if cfg["vent_after_shade"] else rt.base_target
+    target = rt.base_target
     resident = snap.get(cfg["resident_sensor"]).boolean() if cfg["resident_sensor"] else False
     if resident and cfg["resident_close"]:
         target = cfg["close_position"]
     if cfg["ventilation_enabled"]:
         if cfg["window_open"] and snap.get(cfg["window_open"]).boolean() is True:
-            target = cfg["lockout_position"]
+            target = (
+                cfg["lockout_position"]
+                if cfg["contact_lockout_enabled"]
+                else cfg["vent_position"]
+            )
         elif (
             cfg["window_tilted"]
             and snap.get(cfg["window_tilted"]).boolean() is True
@@ -122,6 +135,16 @@ def _combine(values: list[bool | None], operator: str) -> bool | None:
     return True if True in values else None if None in values else False
 
 
+def _shade_gate(cfg: dict, predicates: dict[str, bool | None], end: bool) -> bool | None:
+    prefix = "shade_end" if end else "shade_start"
+    and_keys = [key for key in cfg[f"{prefix}_and"] if _predicate_configured(cfg, key)]
+    or_keys = [key for key in cfg[f"{prefix}_or"] if _predicate_configured(cfg, key)]
+    checks = [_combine([predicates[key] for key in and_keys], "and")] if and_keys else []
+    if or_keys:
+        checks.append(_combine([predicates[key] for key in or_keys], "or"))
+    return _combine(checks, "or" if end else "and") if checks else False
+
+
 def _shade_predicates(cfg: dict, snap: Snapshot, end: bool) -> dict[str, bool | None]:
     sun = snap.get(cfg["sun_sensor"])
     azimuth, elevation = sun.number("azimuth"), sun.number("elevation")
@@ -136,7 +159,7 @@ def _shade_predicates(cfg: dict, snap: Snapshot, end: bool) -> dict[str, bool | 
         if elevation is None
         else cfg["shade_elevation_min"] <= elevation <= cfg["shade_elevation_max"]
     )
-    lux = snap.get(cfg["shade_lux_sensor"] or cfg["lux_sensor"]).number()
+    lux = snap.get(cfg["shade_lux_sensor"]).number()
     forecast = (
         snap.get(cfg["forecast_temp_sensor"]).number()
         if cfg["forecast_temp_sensor"]
@@ -183,7 +206,7 @@ def _shade_predicates(cfg: dict, snap: Snapshot, end: bool) -> dict[str, bool | 
     )
     predicates["weather"] = condition in cfg["shade_weather"] if condition is not None else None
     if end:
-        for key in ("azimuth", "elevation", "weather", "custom"):
+        for key in ("azimuth", "elevation", "custom"):
             if predicates[key] is not None:
                 predicates[key] = not predicates[key]
     return predicates
@@ -201,10 +224,50 @@ def _position(cfg: dict, snap: Snapshot) -> float | None:
 
 def mark_manual(
     cfg: dict, rt: Runtime, position: float | None, now: datetime, snap: Snapshot | None = None
-) -> None:
+) -> bool:
     """Record genuine external operation and optionally adopt today's schedule."""
     if not cfg["manual_enabled"]:
-        return
+        return False
+    snap = snap or Snapshot()
+    correction_mode = None
+    correction_base = None
+    if rt.shading:
+        correction_mode = "shading"
+        correction_base = (
+            cfg["shade_alt_position"]
+            if cfg["shade_alt_entity"] and snap.get(cfg["shade_alt_entity"]).boolean() is True
+            else cfg["shade_position"]
+        )
+    elif cfg["ventilation_enabled"] and rt.last_window == "tilted":
+        correction_mode = "ventilation"
+        correction_base = cfg["vent_position"]
+    if correction_mode and position is not None and rt.manual_since is None and not rt.last_force:
+        same_phase_session = (
+            rt.correction_mode == correction_mode
+            and rt.correction_generation == rt.generation
+            and rt.correction_started_at is not None
+        )
+        within_edit_period = (
+            same_phase_session
+            and rt.correction_deadline is not None
+            and now.timestamp() <= rt.correction_deadline
+        )
+        base_target = rt.correction_base_target if same_phase_session else correction_base
+        if (
+            rt.manual_since is None
+            and (not same_phase_session or within_edit_period)
+            and abs(position - base_target) <= _CORRECTION_LIMIT
+        ):
+            if not same_phase_session:
+                rt.correction_mode = correction_mode
+                rt.correction_base_target = correction_base
+                rt.correction_started_at = now.timestamp()
+                rt.correction_deadline = now.timestamp() + _CORRECTION_EDIT_SECONDS
+                rt.correction_generation = rt.generation
+            rt.correction_target = position
+            rt.hold_signature = None
+            rt.stable.pop("manual.position", None)
+            return True
     rt.manual_since = now.timestamp()
     rt.manual_position = position
     rt.hold_signature = None
@@ -217,7 +280,7 @@ def mark_manual(
             or not cfg["time_enabled"]
         ):
             continue
-        early, late, known = _window(cfg, snap or Snapshot(), now, action)
+        early, late, known = _window(cfg, snap, now, action)
         if not known:
             continue
         if (
@@ -230,6 +293,7 @@ def mark_manual(
             rt.base_owned = True
             rt.generation += 1
             rt.completed_days[action] = now.date().isoformat()
+    return False
 
 
 def hold_current(rt: Runtime, target: float | None, mode: str, *, explicit: bool = False) -> None:
@@ -283,9 +347,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     trace["thresholds"] = {
         key: cfg[key]
         for key in (
-            "lux_open",
-            "lux_close",
-            "lux_hysteresis",
             "sun_open",
             "sun_close",
             "shade_lux_start",
@@ -323,12 +384,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         early, late, day_known = _window(cfg, snap, now, action)
         trace[f"schedule.{action}.day_known"] = day_known
         earliest, latest = _at(now, early).timestamp(), _at(now, late).timestamp()
-        if cfg["calendar_enabled"]:
-            bounds = _calendar_bounds(cfg, snap, now, action)
-            if bounds is None:
-                trace[f"schedule.{action}.calendar"] = False
-                continue
-            earliest, latest = bounds
         if cfg["time_enabled"]:
             if not day_known:
                 continue
@@ -337,18 +392,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                 rt.schedule_latched[action] = False
                 continue
         values = []
-        if cfg["lux_enabled"]:
-            number = snap.get(cfg["lux_sensor"]).number()
-            threshold = cfg["lux_open"] if action == "open" else cfg["lux_close"]
-            value = _compare(number, threshold, action == "open")
-            # Once armed, retain the gate in the hysteresis band; duration still resets on unknown.
-            if value is False and f"light.{action}.lux" in rt.stable and number is not None:
-                value = (
-                    number >= threshold - cfg["lux_hysteresis"]
-                    if action == "open"
-                    else number <= threshold + cfg["lux_hysteresis"]
-                )
-            values.append(stable(f"light.{action}.lux", value, cfg["lux_duration"]))
         if cfg["sun_enabled"]:
             sun = snap.get(cfg["sun_sensor"])
             sensor_key = cfg[f"sun_{action}_sensor"]
@@ -364,7 +407,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                     value if rising is (action == "open") else False if rising is not None else None
                 )
             values.append(stable(f"light.{action}.sun", value, cfg["sun_duration"]))
-        ready = _combine(values, cfg["light_operator"])
+        ready = _combine(values, "and")
         guaranteed = cfg["time_enabled"] and ts >= latest and rt.boundary_days.get(action) != today
         if not cfg["time_enabled"] and not values:
             ready = False
@@ -422,21 +465,46 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     was_shading = rt.shading
     phase = "shade_end" if rt.shading else "shade_start"
     predicates = _shade_predicates(cfg, snap, rt.shading)
+    weather_raw = predicates["weather"]
+    weather_selected = (
+        _stabilize_weather(rt, weather_raw, ts, deadlines) if cfg["shade_weather"] else None
+    )
+    trace["shade.weather_raw"] = weather_raw
+    predicates["weather"] = (
+        not weather_selected if rt.shading and weather_selected is not None else weather_selected
+    )
     trace.update({f"shade.{k}": v for k, v in predicates.items()})
-    and_keys = [
-        k
-        for k in cfg["shade_end_and" if rt.shading else "shade_start_and"]
-        if _predicate_configured(cfg, k)
-    ]
-    or_keys = [
-        k
-        for k in cfg["shade_end_or" if rt.shading else "shade_start_or"]
-        if _predicate_configured(cfg, k)
-    ]
-    checks = [_combine([predicates[k] for k in and_keys], "and")] if and_keys else []
-    if or_keys:
-        checks.append(_combine([predicates[k] for k in or_keys], "or"))
-    shade_gate = _combine(checks, "or" if rt.shading else "and") if checks else False
+    shade_gate = _shade_gate(cfg, predicates, rt.shading)
+    today_phase = rt.phase_latches
+    forced_shade_start = (
+        not rt.shading and cfg["shading_enabled"] and today_phase.get("shade_start") == today
+    )
+    forced_shade_end = rt.shading and today_phase.get("shade_end") == today
+    shade_end_suppressed = not rt.shading and today_phase.get("shade_end") == today
+    natural_start = _shade_predicates(cfg, snap, False)
+    natural_start["weather"] = weather_selected
+    natural_start_gate = _shade_gate(cfg, natural_start, False)
+    if forced_shade_start:
+        shade_gate = True
+    elif forced_shade_end:
+        shade_gate = True
+    elif shade_end_suppressed:
+        shade_gate = False
+    elif (
+        rt.shading
+        and today_phase.get("shade_start") == today
+        and natural_start_gate is not True
+    ):
+        # A one-shot early start stays active until natural shading conditions arrive
+        # or the user explicitly ends this phase.
+        shade_gate = False
+        shade_window = True
+    elif rt.shading and natural_start_gate is True:
+        today_phase.pop("shade_start", None)
+    ventilation_active = cfg["ventilation_enabled"] and rt.last_window == "tilted"
+    if not rt.shading and ventilation_active and shade_gate is True:
+        shade_gate = False
+        trace["phase.deferred"] = "shading waits for active ventilation to finish"
     forecast = (
         snap.get(cfg["forecast_temp_sensor"]).number()
         if cfg["forecast_temp_sensor"]
@@ -469,7 +537,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         rt.shading = False
         rt.pending = rt.pending_since = rt.pending_due = None
         rt.pending_blocked = False
-    elif shade_gate is True and shade_window:
+    elif shade_gate is True and (shade_window or forced_shade_start):
         if phase not in rt.expired:
             first = rt.attempts.setdefault(phase, ts)
             maximum = cfg["shade_end_max" if rt.shading else "shade_start_max"]
@@ -484,17 +552,18 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                     rt.pending_blocked = False
                 delay = (
                     0
-                    if immediate_end
+                    if immediate_end or forced_shade_start or forced_shade_end
                     else cfg["shade_end_delay" if rt.shading else "shade_start_delay"]
                 )
                 if not rt.pending_blocked:
                     rt.pending_due = rt.pending_since + delay
                 if ts >= rt.pending_due:
                     candidate = _shade_candidate(cfg, rt, snap, phase)
-                    gates_ok = (
-                        _gate(snap, "global", candidate, "Potvrdenie tienenia") is True
-                        and _gate(snap, phase, candidate, "Potvrdenie tienenia") is True
-                    )
+                    gates_ok = _gate(snap, "global", candidate, "Potvrdenie tienenia") is True
+                    if not (forced_shade_start or forced_shade_end):
+                        gates_ok = gates_ok and (
+                            _gate(snap, phase, candidate, "Potvrdenie tienenia") is True
+                        )
                     if gates_ok:
                         rt.shading = not rt.shading
                         if rt.shading:
@@ -549,9 +618,15 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         suppressed.append("schedule")
     elif rt.transition_action:
         action = rt.transition_action
-        if action == "shade_end" and cfg["vent_after_shade"]:
-            target, mode = cfg["vent_position"], "ventilation"
-    if rt.pending_blocked:
+    preserve_morning_open = (
+        rt.pending == "shade_start"
+        and mode == "schedule"
+        and action == "open"
+        and rt.base_owned
+        and rt.base_action == "open"
+        and rt.days.get("open") == today
+    )
+    if rt.pending_blocked and not preserve_morning_open:
         target, action = _shade_candidate(cfg, rt, snap, rt.pending), rt.pending
         mode = "shading" if action == "shade_start" else "schedule"
         reason = "Potvrdenie tienenia čaká na podmienky povelu"
@@ -582,6 +657,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     contact_unknown = False
     contact_pending = False
     window = "closed"
+    previous_window = rt.last_window
     if cfg["ventilation_enabled"]:
         for field, name in (("window_open", "open"), ("window_tilted", "tilted")):
             if not cfg[field]:
@@ -604,18 +680,26 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             if window == "open":
                 break
         if window == "open":
-            target, mode, action, reason = (
-                cfg["lockout_position"],
-                "window_lockout",
-                "ventilate",
-                "Otvorené okno · ochranná poloha",
-            )
+            if cfg["contact_lockout_enabled"]:
+                target, mode, action, reason = (
+                    cfg["lockout_position"],
+                    "window_lockout",
+                    "ventilate",
+                    "Otvorený kontakt · ochranná poloha",
+                )
+            else:
+                target, mode, action, reason = (
+                    cfg["vent_position"],
+                    "ventilation",
+                    "ventilate",
+                    "Otvorený kontakt · vetracia poloha",
+                )
             suppressed.extend(("schedule", "shading"))
         elif window == "tilted" and (not resident or cfg["resident_allow_vent"]):
             if rt.last_window == "open" and cfg["vent_keep_full_tilt"]:
                 rt.keep_full_tilt = True
             scheduled_open = mode == "schedule" and rt.base_action == "open" and rt.base_owned
-            shading_wins = mode == "shading" and cfg["shading_over_ventilation"]
+            shading_wins = mode == "shading"
             if rt.keep_full_tilt:
                 target, mode, action, reason = (
                     cfg["lockout_position"],
@@ -638,6 +722,31 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                 rt.manual_policy_action = "ventilate_end" if window == "closed" else "ventilate"
             rt.generation += 1
         rt.last_window = window
+    vent_started = rt.phase_latches.get("vent_start") == today
+    vent_ended = rt.phase_latches.get("vent_end") == today
+    if window == "closed" and previous_window != "closed":
+        rt.phase_latches.pop("vent_end", None)
+        rt.phase_latches.pop("vent_start", None)
+        vent_started = vent_ended = False
+    if (
+        vent_started
+        and not vent_ended
+        and cfg["ventilation_enabled"]
+        and window != "open"
+        and not contact_unknown
+    ):
+        target, mode, action, reason = (
+            cfg["vent_position"],
+            "ventilation",
+            "ventilate",
+            "Používateľ spustil vetranie",
+        )
+    elif vent_ended and mode == "ventilation":
+        target = rt.base_target if rt.base_owned else None
+        mode = "schedule" if target is not None else "idle"
+        action = rt.base_action if target is not None else "ventilate_end"
+        reason = "Používateľ ukončil vetranie"
+        suppressed.append("ventilation")
     trace["window.state"] = window
 
     force = None
@@ -667,6 +776,27 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             "Najnovší aktívny vynútený povel má najvyššiu prioritu",
         )
         suppressed.extend(("schedule", "shading", "manual", "window"))
+    force_contact_blocked = False
+    if (
+        force == "force_close"
+        and cfg["ventilation_enabled"]
+        and (cfg["window_open"] or cfg["window_tilted"])
+    ):
+        if (
+            cfg["contact_lockout_enabled"]
+            and cfg["window_open"]
+            and window == "open"
+        ):
+            force_contact_blocked = True
+            target, mode, action, reason = (
+                cfg["lockout_position"],
+                "window_lockout",
+                "ventilate",
+                "Otvorený priechod má prednosť pred vynúteným zatvorením",
+            )
+            suppressed.append(force)
+        elif contact_unknown:
+            force_contact_blocked = True
     activated_at = activated_at if candidates else None
     if rt.last_force != force or rt.force_changed_at != activated_at:
         rt.generation += 1
@@ -679,6 +809,21 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         rt.allow_reconcile = True
     if not force_unknown:
         rt.last_force = force
+    if rt.correction_mode and rt.correction_generation != rt.generation:
+        rt.correction_mode = None
+        rt.correction_base_target = None
+        rt.correction_target = None
+        rt.correction_started_at = None
+        rt.correction_deadline = None
+        rt.correction_generation = None
+    elif (
+        not force
+        and mode in ("shading", "ventilation")
+        and rt.correction_mode == mode
+        and rt.correction_target is not None
+    ):
+        target = rt.correction_target
+        reason = "Používateľská korekcia aktívneho režimu"
     if resident_leaving and mode == "schedule" and action == "open" and not cfg["resident_open"]:
         hold_current(rt, target, mode)
     if resident_leaving and mode == "schedule" and action == "close":
@@ -716,7 +861,35 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             trace["manual.reset"] = True
 
     inhibit = None
-    if rt.pending_blocked and rt.pending_due > ts and not force:
+    if (
+        trace.get("schedule.open.trigger")
+        and rt.pending == "shade_start"
+        and not rt.pending_blocked
+        and rt.pending_due is not None
+        and 0 <= rt.pending_due - ts <= _MOVEMENT_MERGE_SECONDS
+    ):
+        rt.merge_deferred_action = "open"
+        rt.merge_deferred_day = today
+        rt.merge_deferred_until = rt.pending_due
+        trace["schedule.open.merged_with"] = "shade_start"
+    if rt.merge_deferred_action == "open":
+        if rt.shading:
+            rt.merge_deferred_action = rt.merge_deferred_day = None
+            rt.merge_deferred_until = None
+        elif (
+            rt.merge_deferred_day != today
+            or rt.merge_deferred_until is None
+            or ts >= rt.merge_deferred_until
+            or rt.pending != "shade_start"
+            or rt.pending_blocked
+        ):
+            rt.merge_deferred_action = rt.merge_deferred_day = None
+            rt.merge_deferred_until = None
+        elif mode == "schedule" and action == "open":
+            inhibit = "movement_merge"
+            reason = "Ranné otvorenie sa spojí s blízkym potvrdeným tienením"
+            deadlines.append(rt.merge_deferred_until)
+    if rt.pending_blocked and rt.pending_due > ts and not force and not preserve_morning_open:
         inhibit = "pending_confirmation"
     transition_open = action in ("shade_end", "ventilate_end") and target == cfg["open_position"]
     if not force and mode in ("idle", "schedule") and not rt.base_owned and not transition_open:
@@ -732,15 +905,9 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and not force
     ):
         first, last, _ = _window(cfg, snap, now, action)
-        bounds = (
-            _calendar_bounds(cfg, snap, now, action)
-            if cfg["calendar_enabled"]
-            else (_at(now, first).timestamp(), _at(now, last).timestamp())
-        )
+        bounds = (_at(now, first).timestamp(), _at(now, last).timestamp())
         if bounds is None or not bounds[0] <= ts <= bounds[1]:
             inhibit = "schedule_window"
-    if rt.pending == "shade_start" and mode == "schedule" and action == "open" and not force:
-        inhibit = "pending_confirmation"
     position = _position(cfg, snap)
     behavior_guard = False
     if not force and position is not None and target is not None:
@@ -807,7 +974,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and not force
     ):
         inhibit = "window_tilted"
-    if contact_unknown and not force:
+    if contact_unknown and (not force or force_contact_blocked):
         inhibit = "contact_unknown"
     if contact_pending and not force:
         inhibit = "contact_pending"

@@ -83,6 +83,19 @@ class Runtime:
     expired: list[str] = field(default_factory=list)
     manual_since: float | None = None
     manual_position: float | None = None
+    correction_mode: str | None = None
+    correction_base_target: float | None = None
+    correction_target: float | None = None
+    correction_started_at: float | None = None
+    correction_deadline: float | None = None
+    correction_generation: int | None = None
+    merge_deferred_action: str | None = None
+    merge_deferred_day: str | None = None
+    merge_deferred_until: float | None = None
+    weather_selected: bool | None = None
+    weather_candidate: bool | None = None
+    weather_candidate_since: float | None = None
+    phase_latches: dict[str, str] = field(default_factory=dict)
     estimated_position: float | None = None
     hold_signature: list | None = None
     hold_explicit: bool = False

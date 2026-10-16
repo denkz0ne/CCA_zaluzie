@@ -40,6 +40,19 @@ class Field:
 
 
 FIELDS: dict[str, Field] = {}
+LEGACY_CONFIG_FIELDS = {
+    "calendar_enabled",
+    "calendar_entity",
+    "calendar_open_title",
+    "calendar_close_title",
+    "lux_enabled",
+    "lux_sensor",
+    "lux_open",
+    "lux_close",
+    "lux_hysteresis",
+    "lux_duration",
+    "light_operator",
+}
 
 
 def _f(key, label, default, kind="number", group="cover", **kwargs):
@@ -118,57 +131,8 @@ for prefix, label, early, late, free_early, free_late in [
 for key, label in [
     ("workday_sensor", "Pracovný deň dnes"),
     ("workday_tomorrow", "Pracovný deň zajtra"),
-    ("calendar_entity", "Kalendár"),
 ]:
     _f(key, label, "", "entity", "schedule")
-_f("calendar_enabled", "Riadiť podľa kalendára", False, "bool", "schedule")
-_f(
-    "calendar_open_title",
-    "Názov udalosti otvorenia",
-    "open",
-    "text",
-    "schedule",
-    depends="calendar_enabled",
-)
-_f(
-    "calendar_close_title",
-    "Názov udalosti zatvorenia",
-    "close",
-    "text",
-    "schedule",
-    depends="calendar_enabled",
-)
-
-_f("lux_enabled", "Používať jas", False, "bool", "light")
-_f("lux_sensor", "Senzor jasu", "", "entity", "light", depends="lux_enabled")
-_f(
-    "lux_open",
-    "Jas na otvorenie",
-    120,
-    group="light",
-    unit="lx",
-    maximum=200000,
-    depends="lux_enabled",
-)
-_f(
-    "lux_close",
-    "Jas na zatvorenie",
-    35,
-    group="light",
-    unit="lx",
-    maximum=200000,
-    depends="lux_enabled",
-)
-_f(
-    "lux_hysteresis",
-    "Hysterézia jasu",
-    5,
-    group="light",
-    unit="lx",
-    maximum=10000,
-    depends="lux_enabled",
-)
-_f("lux_duration", "Potvrdenie jasu", 30, group="light", unit="s", depends="lux_enabled")
 _f("sun_enabled", "Používať výšku slnka", False, "bool", "light")
 _f("sun_sensor", "Slnko", "sun.sun", "entity", "light")
 _f(
@@ -202,7 +166,6 @@ _f(
     "light",
     options=("both", "rising_falling"),
 )
-_f("light_operator", "Kombinácia svetla a slnka", "and", "select", "light", options=("and", "or"))
 
 _f("shading_enabled", "Povoliť tienenie", False, "bool", "shading")
 _f(
@@ -330,6 +293,14 @@ _f(
     "Kontakt vyklopeného okna",
     "",
     "entity",
+    "windows",
+    depends="ventilation_enabled",
+)
+_f(
+    "contact_lockout_enabled",
+    "Ochrana proti zatvoreniu pri otvorenom kontakte",
+    True,
+    "bool",
     "windows",
     depends="ventilation_enabled",
 )
@@ -568,6 +539,7 @@ _HELP = {
     "shade_hold_hot": "Pri pretrvávajúcej vysokej teplote zachová tienenie aj po skončení ostatných podmienok.",
     "shade_end_immediate": "Po opustení nastaveného rozsahu slnka ukončí tienenie bez bežného potvrdzovacieho čakania.",
     "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
+    "contact_lockout_enabled": "Zapne pravidlo „Ochrana proti zatvoreniu pri otvorenom kontakte“ pre túto žalúziu. Po vypnutí sa toto pravidlo neuplatní.",
     "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
     "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",
     "tilted_blocks": "Automatické akcie, ktoré sa nesmú vykonať pri vyklopenom okne podľa zvolenej ochrany.",
@@ -669,9 +641,13 @@ def validate_config(raw: dict, *, cover_entity: str | None = None) -> dict:
     """Validate untrusted data and return an independent normalized configuration."""
     if not isinstance(raw, dict):
         raise ConfigError("config", "očakáva sa objekt")
-    unknown = set(raw) - FIELDS.keys() - {"position_source_auto"}
+    raw = deepcopy(raw)
+    if raw.get("lux_sensor") and not raw.get("shade_lux_sensor"):
+        raw["shade_lux_sensor"] = raw["lux_sensor"]
+    unknown = set(raw) - FIELDS.keys() - LEGACY_CONFIG_FIELDS - {"position_source_auto"}
     if unknown:
         raise ConfigError(sorted(unknown)[0], "neznáme nastavenie")
+    raw = {key: value for key, value in raw.items() if key not in LEGACY_CONFIG_FIELDS}
     cfg = {key: deepcopy(raw.get(key, spec.default)) for key, spec in FIELDS.items()}
     auto_source = (
         raw["position_source_auto"]

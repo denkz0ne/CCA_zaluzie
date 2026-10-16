@@ -57,7 +57,7 @@ def test_manual_expiry_describes_delayed_close_only_with_return(return_enabled):
 
 def test_future_sensor_condition_has_range_not_promised_time():
     cfg, rt, snap, decision = scenario(
-        manual_return=True, lux_enabled=True, lux_sensor="sensor.lux", evening_late="20:00"
+        manual_return=True, sun_enabled=True, sun_sensor="sun.sun", evening_late="20:00"
     )
     snap.entities["sensor.lux"] = Reading("0")  # Current truth cannot prove future truth.
     result = build_presentation(cfg, rt, snap, decision, NOW)["next_action"]

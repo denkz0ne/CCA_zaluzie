@@ -22,9 +22,9 @@ def world(**readings):
 
 
 def test_waits_for_early_then_sensor_then_late_fallback():
-    cfg = config(lux_enabled=True, lux_sensor="sensor.lux")
+    cfg = config(sun_enabled=True, sun_sensor="sun.sun", sun_duration=0)
     rt = Runtime()
-    snap = world(**{"sensor.lux": Reading("10")})
+    snap = world(**{"sun.sun": Reading("below_horizon", {"elevation": -10})})
     assert evaluate(cfg, rt, snap, NOW.replace(hour=5)).target is None
     result = evaluate(cfg, rt, snap, NOW)
     assert result.target is None
@@ -57,18 +57,14 @@ def test_workday_sensor_selects_free_day_window():
 
 
 def test_brightness_stable_duration_resets_on_unknown():
-    cfg = config(lux_enabled=True, lux_sensor="sensor.lux", lux_duration=30)
-    rt = Runtime()
-    bright = world(**{"sensor.lux": Reading("200")})
-    assert evaluate(cfg, rt, bright, NOW).target is None
-    assert evaluate(cfg, rt, bright, NOW + timedelta(seconds=29)).target is None
-    evaluate(cfg, rt, world(**{"sensor.lux": Reading("unknown")}), NOW + timedelta(seconds=30))
-    assert evaluate(cfg, rt, bright, NOW + timedelta(seconds=31)).target is None
-    assert evaluate(cfg, rt, bright, NOW + timedelta(seconds=61)).target == 100
+    cfg = config(lux_enabled=True, lux_sensor="sensor.lux", lux_open=500)
+    assert "lux_enabled" not in cfg
+    assert cfg["shade_lux_sensor"] == "sensor.lux"
+    assert evaluate(cfg, Runtime(), world(**{"sensor.lux": Reading("unknown")}), NOW).target == 100
 
 
-@pytest.mark.parametrize("operator,target", [("and", None), ("or", 100)])
-def test_open_sensor_combination(operator, target):
+@pytest.mark.parametrize("operator,target", [("and", None), ("or", None)])
+def test_legacy_brightness_operator_no_longer_changes_schedule(operator, target):
     cfg = config(
         lux_enabled=True,
         lux_sensor="sensor.lux",
@@ -129,6 +125,178 @@ def test_unknown_cancels_pending_start_without_moving():
     assert d.conditions["shade.brightness"] is None
 
 
+def test_active_shading_finishes_before_tilted_contact_starts_ventilation():
+    cfg = shade_config(
+        ventilation_enabled=True,
+        window_tilted="binary_sensor.window",
+        shading_over_ventilation=False,
+        shade_start_delay=0,
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    assert evaluate(cfg, rt, shaded_world(), start).mode == "shading"
+
+    decision = evaluate(
+        cfg,
+        rt,
+        shaded_world(**{"binary_sensor.window": Reading("on")}),
+        start + timedelta(seconds=1),
+    )
+
+    assert decision.mode == "shading"
+    assert decision.target == cfg["shade_position"]
+
+
+def test_active_ventilation_finishes_before_shading_starts():
+    cfg = shade_config(
+        ventilation_enabled=True,
+        window_tilted="binary_sensor.window",
+        shade_start_delay=0,
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    dim = shaded_world("0", **{"binary_sensor.window": Reading("on")})
+    assert evaluate(cfg, rt, dim, start).mode == "ventilation"
+
+    sunny = shaded_world(**{"binary_sensor.window": Reading("on")})
+    decision = evaluate(cfg, rt, sunny, start + timedelta(seconds=1))
+
+    assert decision.mode == "ventilation"
+    assert decision.target == cfg["vent_position"]
+
+
+def test_one_shot_shade_start_bypasses_start_conditions_until_phase_end():
+    cfg = shade_config(shade_start_delay=600)
+    rt = Runtime(phase_latches={"shade_start": NOW.date().isoformat()})
+    dim = shaded_world("0", azimuth=0, elevation=-10)
+    start = NOW.replace(hour=5)
+
+    first = evaluate(cfg, rt, dim, start)
+    assert first.mode == "shading"
+    assert first.target == cfg["shade_position"]
+    assert first.pending is None
+
+    continued = evaluate(cfg, rt, dim, start + timedelta(minutes=1))
+    assert continued.mode == "shading"
+
+    rt.phase_latches["shade_end"] = NOW.date().isoformat()
+    ended = evaluate(cfg, rt, dim, start + timedelta(minutes=2))
+    assert rt.shading is False
+    assert ended.mode != "shading"
+
+
+def test_one_shot_shade_end_does_not_restart_from_same_conditions():
+    cfg = shade_config(shade_start_delay=0)
+    rt = Runtime(shading=True, phase_latches={"shade_end": NOW.date().isoformat()})
+    start = NOW.replace(hour=12)
+
+    first = evaluate(cfg, rt, shaded_world(), start)
+    second = evaluate(cfg, rt, shaded_world(), start + timedelta(seconds=1))
+
+    assert not rt.shading
+    assert first.mode != "shading"
+    assert second.mode != "shading"
+
+
+def test_one_shot_ventilation_start_and_end_are_idempotent():
+    cfg = config(
+        time_enabled=False,
+        morning_enabled=False,
+        evening_enabled=False,
+        ventilation_enabled=True,
+    )
+    rt = Runtime(phase_latches={"vent_start": NOW.date().isoformat()})
+
+    started = evaluate(cfg, rt, world(), NOW)
+    assert started.mode == "ventilation"
+    assert started.target == cfg["vent_position"]
+
+    rt.phase_latches["vent_end"] = NOW.date().isoformat()
+    ended = evaluate(cfg, rt, world(), NOW + timedelta(seconds=1))
+    repeated = evaluate(cfg, rt, world(), NOW + timedelta(seconds=2))
+    assert ended.mode != "ventilation"
+    assert repeated.mode != "ventilation"
+
+
+def test_morning_open_is_logically_merged_with_confirmed_shading_within_30_minutes():
+    cfg = config(
+        shading_enabled=True,
+        shade_position=58,
+        shade_start_delay=20 * 60,
+        shade_lux_sensor="sensor.lux",
+        sun_sensor="sun.sun",
+        morning_early="07:00",
+        morning_late="07:00",
+    )
+    rt = Runtime()
+    start = NOW
+
+    closed_shaded = shaded_world(**{"cover.blind": Reading("closed", {"current_position": 0})})
+    opening = evaluate(cfg, rt, closed_shaded, start)
+
+    assert rt.days["open"] == start.date().isoformat()
+    assert opening.inhibit == "movement_merge"
+    assert opening.target == cfg["open_position"]
+    assert rt.merge_deferred_action == "open"
+
+    shaded = evaluate(cfg, rt, closed_shaded, start + timedelta(minutes=20))
+
+    assert shaded.mode == "shading"
+    assert shaded.target == cfg["shade_position"]
+    assert shaded.inhibit is None
+    assert rt.merge_deferred_action is None
+
+
+def test_uncertain_or_late_shading_does_not_defer_guaranteed_morning_open():
+    cfg = config(
+        shading_enabled=True,
+        shade_position=58,
+        shade_start_delay=31 * 60,
+        shade_lux_sensor="sensor.lux",
+        sun_sensor="sun.sun",
+        morning_early="07:00",
+        morning_late="07:00",
+    )
+    rt = Runtime()
+    closed_shaded = shaded_world(**{"cover.blind": Reading("closed", {"current_position": 0})})
+
+    decision = evaluate(cfg, rt, closed_shaded, NOW)
+
+    assert decision.target == cfg["open_position"]
+    assert decision.inhibit is None
+    assert rt.merge_deferred_action is None
+
+
+def test_rejected_shading_action_does_not_suppress_morning_open():
+    cfg = config(
+        shading_enabled=True,
+        shade_position=58,
+        shade_start_delay=0,
+        shade_lux_sensor="sensor.lux",
+        sun_sensor="sun.sun",
+        morning_early="07:00",
+        morning_late="07:00",
+    )
+    rt = Runtime()
+    snap = shaded_world(
+        **{
+            "cover.blind": Reading("closed", {"current_position": 0}),
+        }
+    )
+    snap.gates["shade_start"] = False
+
+    decision = evaluate(cfg, rt, snap, NOW)
+
+    assert decision.target == cfg["open_position"]
+    assert decision.action == "open"
+    assert decision.inhibit is None
+    assert rt.pending_blocked is True
+
+
 def test_shading_alternate_position_and_temperature_path():
     cfg = shade_config(
         shade_independent=True,
@@ -149,10 +317,55 @@ def test_azimuth_range_can_cross_north():
     assert evaluate(cfg, Runtime(), shaded_world(azimuth=0), NOW.replace(hour=12)).target == 58
 
 
+def weather_shade_config():
+    return shade_config(
+        forecast_entity="weather.home",
+        shade_weather=["sunny", "partlycloudy"],
+        shade_start_and=["weather"],
+        shade_start_or=[],
+        shade_end_and=[],
+        shade_end_or=["weather"],
+        shade_start_delay=0,
+        shade_end_delay=0,
+    )
+
+
+def weather_world(condition):
+    snap = shaded_world()
+    snap.forecast_conditions["weather.home"] = condition
+    return snap
+
+
+def test_selected_weather_exit_is_stabilized_asymmetrically():
+    cfg = weather_shade_config()
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    assert evaluate(cfg, rt, weather_world("sunny"), start).mode == "shading"
+
+    changed = start + timedelta(minutes=5)
+    assert evaluate(cfg, rt, weather_world("cloudy"), changed).mode == "shading"
+    assert evaluate(cfg, rt, weather_world("cloudy"), changed + timedelta(minutes=24)).mode == "shading"
+    assert evaluate(cfg, rt, weather_world("cloudy"), changed + timedelta(minutes=25)).mode != "shading"
+
+
+def test_weather_return_to_selected_state_uses_short_confirmation():
+    cfg = weather_shade_config()
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    assert evaluate(cfg, rt, weather_world("cloudy"), start).mode != "shading"
+
+    changed = start + timedelta(minutes=1)
+    assert evaluate(cfg, rt, weather_world("sunny"), changed).mode != "shading"
+    assert evaluate(cfg, rt, weather_world("sunny"), changed + timedelta(minutes=2)).mode == "shading"
+
+
 def test_force_wins_over_manual_contacts_but_pause_inhibits():
     cfg = config(
+        time_enabled=False,
+        morning_enabled=False,
+        evening_enabled=False,
         ventilation_enabled=True,
-        window_open="binary_sensor.window",
+        window_tilted="binary_sensor.window",
         force_close="input_boolean.force",
         force_pause="input_boolean.pause",
         contact_delay=0,
@@ -167,6 +380,49 @@ def test_force_wins_over_manual_contacts_but_pause_inhibits():
     )
     d = evaluate(cfg, rt, snap, NOW)
     assert d.target == 0 and d.mode == "force_close" and d.inhibit == "paused"
+
+
+def test_passage_contact_lockout_prevents_force_close():
+    cfg = config(
+        ventilation_enabled=True,
+        window_open="binary_sensor.passage",
+        force_close="input_boolean.force_close",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    snap = world(
+        **{
+            "binary_sensor.passage": Reading("on"),
+            "input_boolean.force_close": Reading("on", changed_at=100),
+        }
+    )
+
+    decision = evaluate(cfg, Runtime(), snap, NOW)
+
+    assert decision.mode == "window_lockout"
+    assert decision.target == cfg["lockout_position"]
+    assert decision.action == "ventilate"
+    assert "force_close" in decision.suppressed
+
+
+def test_unknown_passage_contact_blocks_force_close():
+    cfg = config(
+        ventilation_enabled=True,
+        window_open="binary_sensor.passage",
+        force_close="input_boolean.force_close",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    snap = world(
+        **{
+            "binary_sensor.passage": Reading("unknown"),
+            "input_boolean.force_close": Reading("on", changed_at=100),
+        }
+    )
+
+    decision = evaluate(cfg, Runtime(), snap, NOW)
+
+    assert decision.inhibit == "contact_unknown"
 
 
 def test_disabled_ventilation_ignores_all_contacts():
@@ -206,6 +462,68 @@ def test_manual_adopts_schedule_without_second_move():
     mark_manual(cfg, rt, 100, NOW)
     assert rt.days["open"] == "2026-10-12"
     assert rt.base_target == 100
+
+
+def test_shading_manual_correction_uses_original_target_and_fixed_120_seconds():
+    cfg = shade_config(shade_position=0, shade_start_delay=0)
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    evaluate(cfg, rt, shaded_world(), start)
+
+    assert mark_manual(cfg, rt, 15, start + timedelta(hours=2), shaded_world()) is True
+    deadline = rt.correction_deadline
+    assert rt.correction_base_target == 0
+    assert rt.correction_target == 15
+    assert rt.manual_since is None
+
+    assert mark_manual(cfg, rt, 19, start + timedelta(hours=2, seconds=60), shaded_world()) is True
+    assert rt.correction_target == 19
+    assert rt.correction_deadline == deadline
+    assert evaluate(cfg, rt, shaded_world(), start + timedelta(hours=2, seconds=61)).target == 19
+
+
+def test_manual_correction_limit_is_relative_to_original_target():
+    cfg = shade_config(shade_position=0, shade_start_delay=0)
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    evaluate(cfg, rt, shaded_world(), start)
+    assert mark_manual(cfg, rt, 20, start + timedelta(hours=1), shaded_world()) is True
+
+    assert mark_manual(cfg, rt, 21, start + timedelta(hours=1, seconds=30), shaded_world()) is False
+    assert rt.correction_target == 20
+    assert rt.manual_since == (start + timedelta(hours=1, seconds=30)).timestamp()
+
+
+def test_correction_window_starts_once_and_does_not_restart_after_expiry():
+    cfg = shade_config(shade_position=0, shade_start_delay=0)
+    rt = Runtime()
+    start = NOW.replace(hour=12)
+    evaluate(cfg, rt, shaded_world(), start)
+
+    assert mark_manual(cfg, rt, 10, start + timedelta(minutes=1), shaded_world()) is True
+    assert mark_manual(cfg, rt, 15, start + timedelta(minutes=2), shaded_world()) is True
+    assert mark_manual(cfg, rt, 12, start + timedelta(minutes=3, seconds=1), shaded_world()) is False
+    assert rt.correction_target == 15
+    assert rt.manual_since == (start + timedelta(minutes=3, seconds=1)).timestamp()
+
+
+def test_ventilation_manual_correction_is_scoped_to_active_phase():
+    cfg = config(
+        time_enabled=False,
+        morning_enabled=False,
+        evening_enabled=False,
+        ventilation_enabled=True,
+        window_tilted="binary_sensor.window",
+        contact_delay=0,
+        contact_state_delay=0,
+    )
+    rt = Runtime()
+    snap = world(**{"binary_sensor.window": Reading("on")})
+    evaluate(cfg, rt, snap, NOW)
+
+    assert mark_manual(cfg, rt, 37, NOW + timedelta(seconds=10), snap) is True
+    assert rt.correction_mode == "ventilation"
+    assert rt.correction_base_target == cfg["vent_position"]
 
 
 def test_resident_sleep_closes_and_blocks_ordinary_open():
@@ -338,7 +656,7 @@ def test_unknown_required_sun_sensor_cannot_end_active_shading():
     )
 
 
-def test_calendar_uses_event_end_as_late_fallback():
+def test_calendar_events_no_longer_change_schedule():
     cfg = config(
         calendar_enabled=True,
         calendar_entity="calendar.day",
@@ -350,7 +668,7 @@ def test_calendar_uses_event_end_as_late_fallback():
     snap.calendar_events = [
         {"summary": "open", "start": NOW.isoformat(), "end": (NOW + timedelta(hours=1)).isoformat()}
     ]
-    assert evaluate(cfg, rt, snap, NOW).target is None
+    assert evaluate(cfg, rt, snap, NOW).target == 100
     assert evaluate(cfg, rt, snap, NOW + timedelta(hours=1)).target == 100
 
 
@@ -442,21 +760,21 @@ def test_disabled_evening_progresses_base_without_owning_motor_dispatch():
 def test_repeated_sensor_open_is_configurable():
     cfg = config(
         time_enabled=False,
-        lux_enabled=True,
-        lux_sensor="sensor.lux",
-        lux_duration=0,
+        sun_enabled=True,
+        sun_sensor="sun.sun",
+        sun_duration=0,
         open_once=False,
         close_once=False,
     )
     rt = Runtime()
-    assert evaluate(cfg, rt, world(**{"sensor.lux": Reading("200")}), NOW).target == 100
+    assert evaluate(cfg, rt, world(**{"sun.sun": Reading("above_horizon", {"elevation": 10})}), NOW).target == 100
     assert (
-        evaluate(cfg, rt, world(**{"sensor.lux": Reading("0")}), NOW + timedelta(minutes=1)).target
+        evaluate(cfg, rt, world(**{"sun.sun": Reading("below_horizon", {"elevation": -10})}), NOW + timedelta(minutes=1)).target
         == 0
     )
     assert (
         evaluate(
-            cfg, rt, world(**{"sensor.lux": Reading("200")}), NOW + timedelta(minutes=2)
+            cfg, rt, world(**{"sun.sun": Reading("above_horizon", {"elevation": 10})}), NOW + timedelta(minutes=2)
         ).target
         == 100
     )
