@@ -1,6 +1,6 @@
 # Integration implementation brief
 
-Status: implemented and released as version 2026.12.3 for Home Assistant 2026.9+. This document preserves
+Status: implemented and released as version 2026.12.4 for Home Assistant 2026.9+. This document preserves
 the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
 ## 2026.11.0 runtime additions

@@ -114,6 +114,22 @@ const eventNames = {
   simulated_command_completed: "Simulovaný povel dokončený",
   simulated_reset_completed: "Simulovaný reset dokončený",
 };
+const actionNames = {
+  open: "Otvorenie žalúzie",
+  close: "Zatvorenie žalúzie",
+  shade_start: "Začiatok tienenia",
+  shade_end: "Ukončenie tienenia",
+  ventilate: "Vetracia poloha",
+  ventilation: "Vetranie",
+  manual: "Manuálne ovládanie",
+  force_open: "Vynútené otvorenie",
+  force_close: "Vynútené zatvorenie",
+  force_shade: "Vynútené tienenie",
+  force_ventilate: "Vynútené vetranie",
+  pause: "Pozastavenie automatiky",
+  reset: "Reset polohy",
+  error: "Chyba pri akcii",
+};
 const clock = (ts) =>
   ts == null
     ? "Čaká na podmienky"
@@ -369,6 +385,7 @@ export class CCAZaluziePanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._controllers = new Map();
+    this._liveSignatures = new Map();
     this._drafts = new Map();
     this._baseline = new Map();
     this._draftBases = new Map();
@@ -390,6 +407,7 @@ export class CCAZaluziePanel extends HTMLElement {
     this._error = "";
     this._notice = "";
     this._busy = false;
+    this._liveRenderQueued = false;
     for (const name of [
       "click",
       "input",
@@ -401,6 +419,9 @@ export class CCAZaluziePanel extends HTMLElement {
       "dragleave",
       "drop",
       "dragend",
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
     ])
       this.shadowRoot.addEventListener(name, (e) => this._event(e));
   }
@@ -451,13 +472,13 @@ export class CCAZaluziePanel extends HTMLElement {
         (event) => {
           const p = event.event || event;
           if (p.order) this._applyOrder(p.order, p.order_revision);
+          let changed = Boolean(p.order || p.removed === true);
           if (p.controller) {
-            this._update(p.controller);
-            if (p.controller.entry_id === this._selected)
+            changed = this._update(p.controller) || changed;
+            if (changed && p.controller.entry_id === this._selected)
               this._loadPrediction();
           } else if (p.removed === true) this._remove(p.entry_id);
-          if (this._view === "settings") this._renderList();
-          else this._render();
+          if (changed) this._scheduleLiveRender();
         },
         { type: "cca_zaluzie/subscribe" },
       );
@@ -494,8 +515,22 @@ export class CCAZaluziePanel extends HTMLElement {
     }
     this._render();
   }
+  _scheduleLiveRender() {
+    if (this._liveRenderQueued) return;
+    this._liveRenderQueued = true;
+    requestAnimationFrame(() => {
+      this._liveRenderQueued = false;
+      if (this._view === "settings") this._renderList();
+      else this._render(true);
+    });
+  }
   _update(c) {
+    const previous = this._liveSignatures.get(c.entry_id);
+    const { server_time: _serverTime, ...stableSnapshot } = c;
+    const signature = JSON.stringify(stableSnapshot);
+    const changed = previous !== signature;
     this._controllers.set(c.entry_id, c);
+    this._liveSignatures.set(c.entry_id, signature);
     if (!this._order.includes(c.entry_id)) this._order.push(c.entry_id);
     this._offset = (c.server_time || Date.now() / 1000) - Date.now() / 1000;
     this._baseline.set(c.entry_id, copy(c.config));
@@ -505,11 +540,16 @@ export class CCAZaluziePanel extends HTMLElement {
       this._baseline.set(c.entry_id, copy(c.config));
       this._draftRevisions.set(c.entry_id, c.config_revision);
     }
+    return changed;
   }
   _bulk() {
     return this._selection.size > 1;
   }
   _state(c) {
+    if (["opening", "closing"].includes(c.motion?.direction))
+      return c.motion.direction === "opening" ? "Otvára sa…" : "Zatvára sa…";
+    if (c.motion?.status === "moving") return "Pohyb prebieha";
+    if (c.motion?.status === "requested") return "Pripravuje sa pohyb…";
     return !c.available
       ? "Nedostupná"
       : inhibits[c.decision?.inhibit] ||
@@ -522,51 +562,52 @@ export class CCAZaluziePanel extends HTMLElement {
       ? `${n.at ? clock(n.at) : n.earliest ? `Najskôr ${clock(n.earliest)}` : "Čaká na podmienky"} · ${n.label || "Ďalšia akcia"}`
       : "Čaká na podmienky";
   }
+  _eventLabel(type, mode) {
+    if (eventNames[type]) return eventNames[type];
+    if (type === "close" && mode === "schedule") return "Večerné zatvorenie";
+    return actionNames[type] || "Akcia žalúzie";
+  }
+  _actionLabel(event) {
+    if (!event?.type) return "Bez vypočítaného pohybu";
+    if (event.type === "close" && event.mode === "window_lockout")
+      return "Ochranné zatvorenie";
+    if (event.type === "open" && event.mode === "schedule")
+      return "Ranné otvorenie";
+    if (event.type === "close" && event.mode === "schedule")
+      return "Večerné zatvorenie";
+    return actionNames[event.type] || "Akcia žalúzie";
+  }
   _blind(c, large = false) {
     const pos =
       typeof c.position === "number"
         ? Math.min(100, Math.max(0, c.position))
         : null;
-    const movement = c.last_movement;
-    const dir = ["opening", "closing"].includes(movement?.direction)
-      ? movement.direction
+    const dir = ["opening", "closing"].includes(c.motion?.direction)
+      ? c.motion.direction
       : null;
-    return `<span class="blind-wrap ${large ? "large" : ""}" role="img" aria-label="${pos == null ? "Neznáma poloha" : `Potvrdená poloha ${pos} %`}">${dir ? `<span class="movement ${dir}" data-direction="${dir}" ${tip(`Posledný pozorovaný pohyb: ${dir === "opening" ? "otváranie" : "zatváranie"} · ${clock(movement.at)}`)} aria-label="Posledný pozorovaný pohyb: ${dir === "opening" ? "otváranie" : "zatváranie"} · ${clock(movement.at)}">${dir === "opening" ? "▲" : "▼"}</span>` : ""}<svg viewBox="0 0 60 70" aria-hidden="true"><rect x="5" y="5" width="50" height="60" rx="2" fill="var(--primary-soft)" stroke="var(--secondary)" stroke-width="2"/><rect x="8" y="8" width="44" height="${pos == null ? 0 : (54 * (100 - pos)) / 100}" fill="var(--secondary)" opacity=".7"/><path d="M8 8h44 M8 15h44 M8 22h44 M8 29h44 M8 36h44 M8 43h44 M8 50h44 M8 57h44" stroke="var(--card)" stroke-width="1"/><path d="M3 4h54" stroke="var(--secondary)" stroke-width="4"/></svg></span>`;
+    return `<span class="blind-wrap ${large ? "large" : ""} ${dir ? "is-moving" : ""}" role="img" aria-label="${pos == null ? "Neznáma poloha" : `Potvrdená poloha ${pos} %`}${dir ? ` · ${dir === "opening" ? "otvára sa" : "zatvára sa"}` : ""}">${dir ? `<span class="movement ${dir}" data-direction="${dir}" aria-label="${dir === "opening" ? "Otvára sa" : "Zatvára sa"}">${dir === "opening" ? "▲" : "▼"}</span>` : ""}<svg viewBox="0 0 60 70" aria-hidden="true"><rect x="5" y="5" width="50" height="60" rx="2" fill="var(--primary-soft)" stroke="var(--secondary)" stroke-width="2"/><rect x="8" y="8" width="44" height="${pos == null ? 0 : (54 * (100 - pos)) / 100}" fill="var(--secondary)" opacity=".7"/><path d="M8 8h44 M8 15h44 M8 22h44 M8 29h44 M8 36h44 M8 43h44 M8 50h44 M8 57h44" stroke="var(--card)" stroke-width="1"/><path d="M3 4h54" stroke="var(--secondary)" stroke-width="4"/></svg></span>`;
   }
   _list() {
     return this._order
       .map((id, index) => {
         const c = this._controllers.get(id);
-        return `<div class="automation ${this._selection.has(id) ? "multi-selected" : ""}" data-row="${esc(id)}"><div class="drag-strip"><button class="drag-grip" data-grip="${esc(id)}" draggable="true" aria-label="Presunúť automatizáciu ${esc(c.name)}" title="Presunúť automatizáciu · šípka hore/dole alebo potiahnuť"><span class="grip-dots" aria-hidden="true">⠿⠿⠿</span><span>Presunúť automatizáciu</span></button><div class="order-buttons">${button("↑", `data-order="${esc(id)}" data-delta="-1" ${index === 0 ? "disabled" : ""}`, "Presunúť vyššie", "order-button")}${button("↓", `data-order="${esc(id)}" data-delta="1" ${index === this._order.length - 1 ? "disabled" : ""}`, "Presunúť nižšie", "order-button")}</div></div><button class="cover-row ${id === this._selected ? "selected" : ""}" data-cover="${esc(id)}" aria-pressed="${id === this._selected}" ${tip("Zobraziť žalúziu. Ctrl/Cmd + kliknutie pridá do hromadného výberu bez zmeny zobrazenej žalúzie.")}><div class="cover-top">${this._blind(c)}<span class="cover-name">${esc(c.name)}</span><span class="cover-number">${c.position == null ? "?" : esc(c.position)}<small> %</small></span></div><span class="badge ${c.decision?.inhibit ? "amber" : ""}">${esc(this._state(c))}</span>${c.simulation?.enabled ? '<span class="badge amber">Simulácia</span>' : ""}<div class="cover-next">◷ <span>${esc(this._next(c))}</span></div></button><label class="select-cover" title="Vybrať na hromadnú úpravu"><input type="checkbox" data-multi="${esc(id)}" aria-label="Vybrať ${esc(c.name)} na hromadnú úpravu" ${this._selection.has(id) ? "checked" : ""}> Hromadný výber</label></div>`;
+        return `<div class="automation ${this._selection.has(id) ? "multi-selected" : ""}" data-row="${esc(id)}"><button class="drag-grip" data-grip="${esc(id)}" draggable="true" aria-label="Presunúť automatizáciu ${esc(c.name)}" title="Potiahnutím presunúť · šípka hore/dole alebo Domov/Koniec"><span class="grip-dots" aria-hidden="true">⠿</span></button><button class="cover-row ${id === this._selected ? "selected" : ""}" data-cover="${esc(id)}" aria-pressed="${id === this._selected}" ${tip("Zobraziť žalúziu. Ctrl/Cmd + kliknutie pridá do hromadného výberu bez zmeny zobrazenej žalúzie. Na dotyk podržte kartu.")}><div class="cover-top">${this._blind(c)}<span class="cover-name">${esc(c.name)}</span><span class="cover-number">${c.position == null ? "?" : esc(c.position)}<small> %</small></span></div><span class="badge ${c.decision?.inhibit ? "amber" : ""}">${esc(this._state(c))}</span>${c.simulation?.enabled ? '<span class="badge amber">Simulácia</span>' : ""}<div class="cover-next">◷ <span>${esc(this._next(c))}</span></div></button></div>`;
       })
       .join("");
   }
   _renderList() {
     const list = this.shadowRoot.querySelector(".cover-list");
     if (list) {
-      const grip = this.shadowRoot.activeElement?.dataset?.grip;
-      const scroll = list.scrollTop,
-        x = list.scrollLeft;
-      list.innerHTML = this._list();
-      list.scrollTop = scroll;
-      list.scrollLeft = x;
-      if (grip)
-        this.shadowRoot
-          .querySelector(`[data-grip="${CSS.escape(grip)}"]`)
-          ?.focus();
+      this._patchChildren(list, this._list());
     }
   }
-  _render() {
+  _render(preserveDialog = false) {
+    if (!preserveDialog) this.shadowRoot.querySelector("dialog[open]")?.close();
+    this._preserveDialog = preserveDialog;
     const c = this._controllers.get(this._selected);
-    const old = this.shadowRoot.querySelector(".cover-list");
-    const scroll = old?.scrollTop || 0,
-      x = old?.scrollLeft || 0;
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="${styleURL}"><header class="appbar"><div class="brand"><svg width="32" height="32" viewBox="0 0 256 256" aria-hidden="true"><path fill="currentColor" d="${iconPath}"/></svg><div><h1>Žalúzie</h1><small>Automatizácie a aktuálny priebeh</small></div></div><a class="btn" title="Pridať žalúziu cez nastavenia Home Assistanta" href="/config/integrations/dashboard/add?domain=cca_zaluzie">＋ Pridať žalúziu</a></header><main class="layout"><aside class="sidebar"><div class="sidebar-head"><h2>Automatizácie</h2><span>${this._controllers.size}</span></div><div class="cover-list">${this._list()}</div><small class="selection-hint">Ctrl/Cmd + kliknutie alebo zaškrtávacie políčko: hromadná úprava.</small></aside><section class="content"><nav class="tabs">${button("Prehľad", 'data-view="overview"', "Poloha, ovládanie a história", `tab ${this._view === "overview" ? "active" : ""}`)}${button("Konfigurácia", 'data-view="settings"', "Nastavenia vybraných žalúzií", `tab ${this._view === "settings" ? "active" : ""}`)}</nav>${this._error ? `<div class="error" role="alert">${esc(this._error)}</div>` : ""}${c ? `<div class="context"><div><div class="name">${esc(c.name)}</div><small>${esc(c.cover_entity)}</small></div><div class="head-switch"><div><strong>Automatické riadenie</strong><small>${c.config.enabled ? "Zapnuté · riadi podľa pravidiel" : "Vypnuté"}</small></div>${button(c.config.enabled ? "Zapnuté" : "Vypnuté", `data-action="${c.config.enabled ? "disable" : "enable"}" role="switch" aria-checked="${!!c.config.enabled}" ${this._busy ? "disabled" : ""}`, "Zmeniť automatické riadenie tejto žalúzie. Úprava je okamžitá.", "btn")}</div></div>${this._view === "settings" ? this._settings(c) : this._overview(c)}` : '<section class="card pad">Pridaj prvú žalúziu cez nastavenia integrácie.</section>'}</section></main>${this._notice ? `<div class="toast" role="status">${esc(this._notice)}${button("✕", 'data-dismiss aria-label="Zavrieť oznámenie"', "Zavrieť oznámenie")}</div>` : ""}<dialog><div class="dialog-header"><h3>Detail udalosti</h3>${button("✕", 'data-dialog-close aria-label="Zavrieť detail"', "Zavrieť detail")}</div><div class="dialog-body"></div></dialog>`;
-    const list = this.shadowRoot.querySelector(".cover-list");
-    if (list) {
-      list.scrollTop = scroll;
-      list.scrollLeft = x;
-    }
+    const html = `<link rel="stylesheet" href="${styleURL}"><header class="appbar"><div class="brand"><svg width="32" height="32" viewBox="0 0 256 256" aria-hidden="true"><path fill="currentColor" d="${iconPath}"/></svg><div><h1>Žalúzie</h1><small>Automatizácie a aktuálny priebeh</small></div></div><a class="btn" title="Pridať žalúziu cez nastavenia Home Assistanta" href="/config/integrations/dashboard/add?domain=cca_zaluzie">＋ Pridať žalúziu</a></header><main class="layout"><aside class="sidebar"><div class="sidebar-head"><h2>Automatizácie</h2><span>${this._controllers.size}</span></div><div class="cover-list">${this._list()}</div><small class="selection-hint">Ctrl/Cmd + kliknutie vyberie viac žalúzií; na dotyk podržte kartu.</small></aside><section class="content"><nav class="tabs">${button("Prehľad", 'data-view="overview"', "Poloha, ovládanie a história", `tab ${this._view === "overview" ? "active" : ""}`)}${button("Konfigurácia", 'data-view="settings"', "Nastavenia vybraných žalúzií", `tab ${this._view === "settings" ? "active" : ""}`)}</nav>${this._error ? `<div class="error" role="alert">${esc(this._error)}</div>` : ""}${c ? `<div class="context"><div><div class="name">${esc(c.name)}</div><small>${esc(c.cover_entity)}</small></div><div class="head-switch"><div><strong>Automatické riadenie</strong><small>${c.config.enabled ? "Zapnuté · riadi podľa pravidiel" : "Vypnuté"}</small></div>${button(c.config.enabled ? "Zapnuté" : "Vypnuté", `data-action="${c.config.enabled ? "disable" : "enable"}" role="switch" aria-checked="${!!c.config.enabled}" ${this._busy ? "disabled" : ""}`, "Zmeniť automatické riadenie tejto žalúzie. Úprava je okamžitá.", "btn")}</div></div>${this._view === "settings" ? this._settings(c) : this._overview(c)}` : '<section class="card pad">Pridaj prvú žalúziu cez nastavenia integrácie.</section>'}</section></main>${this._notice ? `<div class="toast" role="status">${esc(this._notice)}${button("✕", 'data-dismiss aria-label="Zavrieť oznámenie"', "Zavrieť oznámenie")}</div>` : ""}<dialog><div class="dialog-header"><h3>Detail udalosti</h3>${button("✕", 'data-dialog-close aria-label="Zavrieť detail"', "Zavrieť detail")}</div><div class="dialog-body"></div></dialog>`;
+    this._patchChildren(this.shadowRoot, html);
+    this._preserveDialog = false;
     this._nativeSelectors();
     for (const el of this.shadowRoot.querySelectorAll(
       "ha-slider[data-position]",
@@ -578,6 +619,106 @@ export class CCAZaluziePanel extends HTMLElement {
       el.disabled = el.hasAttribute("disabled");
     }
     this._countdown();
+  }
+  _nodeKey(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+    if (node.hasAttribute("data-measurement"))
+      return `measurement:${node.getAttribute("data-point-at")}`;
+    for (const key of [
+      "data-row",
+      "data-cover",
+      "data-grip",
+      "data-key",
+      "data-group",
+      "data-event",
+      "data-track",
+      "data-view",
+      "data-action",
+      "data-section",
+    ])
+      if (node.hasAttribute(key)) return `${key}:${node.getAttribute(key)}`;
+    return node.id ? `id:${node.id}` : null;
+  }
+  _patchChildren(parent, html) {
+    const svgNamespace = "http://www.w3.org/2000/svg";
+    const template =
+      parent.namespaceURI === svgNamespace
+        ? document.createElementNS(svgNamespace, "svg")
+        : document.createElement("template");
+    template.innerHTML = html;
+    const fresh = [...(template.content?.childNodes || template.childNodes)];
+    let cursor = parent.firstChild;
+    for (const next of fresh) {
+      const key = this._nodeKey(next);
+      let current = cursor;
+      if (key) {
+        current =
+          [...parent.childNodes].find(
+            (node) =>
+              this._nodeKey(node) === key &&
+              node.nodeType === next.nodeType &&
+              node.namespaceURI === next.namespaceURI &&
+              (node.nodeType !== Node.ELEMENT_NODE ||
+                node.tagName === next.tagName),
+          ) || null;
+      } else if (
+        current &&
+        (this._nodeKey(current) ||
+          current.nodeType !== next.nodeType ||
+          (current.nodeType === Node.ELEMENT_NODE &&
+            current.tagName !== next.tagName))
+      ) {
+        current =
+          [...parent.childNodes]
+            .slice([...parent.childNodes].indexOf(cursor) + 1)
+            .find(
+              (node) =>
+                !this._nodeKey(node) &&
+                node.nodeType === next.nodeType &&
+                node.namespaceURI === next.namespaceURI &&
+                (node.nodeType !== Node.ELEMENT_NODE ||
+                  node.tagName === next.tagName),
+            ) || null;
+      }
+      if (!current) current = next;
+      else this._patchNode(current, next);
+      if (current !== cursor) parent.insertBefore(current, cursor);
+      cursor = current.nextSibling;
+    }
+    while (cursor) {
+      const remove = cursor;
+      cursor = cursor.nextSibling;
+      parent.removeChild(remove);
+    }
+  }
+  _patchNode(current, next) {
+    if (current.nodeType === Node.TEXT_NODE) {
+      if (current.nodeValue !== next.nodeValue)
+        current.nodeValue = next.nodeValue;
+      return;
+    }
+    const active = current === this.shadowRoot.activeElement;
+    const dialogOpen =
+      this._preserveDialog &&
+      current instanceof HTMLDialogElement &&
+      current.open;
+    for (const attr of [...current.attributes])
+      if (!next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+    for (const attr of [...next.attributes])
+      if (current.getAttribute(attr.name) !== attr.value)
+        current.setAttribute(attr.name, attr.value);
+    this._patchChildren(current, next.innerHTML);
+    if (
+      current instanceof HTMLInputElement ||
+      current instanceof HTMLTextAreaElement ||
+      current instanceof HTMLSelectElement
+    ) {
+      if (!active && current.value !== next.value) current.value = next.value;
+      if (current instanceof HTMLInputElement && !active)
+        current.checked = next.checked;
+    }
+    if (current instanceof HTMLDialogElement && dialogOpen && !current.open)
+      current.showModal();
   }
   _overview(c) {
     const d = c.decision || {},
@@ -604,7 +745,7 @@ export class CCAZaluziePanel extends HTMLElement {
     const lockoutNote = postCloseLockout
       ? `<div class="inline-note amber contact-lockout"><strong>Ochrana po zatvorení kontaktu</strong><span>Automatika počas ochrany nezatvorí žalúziu. Manuálne zatvorenie ju môže jednorazovo ukončiť, keď je kontakt potvrdene zatvorený. Zostáva <b class="reset-clock" data-due="${lockoutUntil}"></b>.</span></div>`
       : "";
-    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p><p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button(postCloseLockout && closeReleaseReady ? "↓ Zatvoriť · jednorazovo" : "↓ Zatvoriť", `data-action="close" ${closeDisabled ? "disabled" : ""}`, postCloseLockout ? (closeReleaseReady ? "Vedome zatvoriť a jednorazovo ukončiť ochranu; kontakt je potvrdene zatvorený." : "Čaká sa na potvrdenie zatvoreného kontaktu.") : "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}</div>${lockoutNote}<div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, positionDisabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section>${this._predictionBlock(c)}</div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button(shadingActive ? "Ukončiť tienenie dnes" : "Začať tienenie teraz", `data-action="${shadingActive ? "phase_shade_end" : "phase_shade_start"}" ${disabled ? "disabled" : ""}`, shadingActive ? "Ukončiť aktuálne tienenie a zabrániť jeho opätovnému začatiu dnes." : "Začať tienenie hneď; platí do jeho bežného ukončenia alebo do konca dňa.") : ""}${c.config.ventilation_enabled ? button(ventilationActive ? "Ukončiť vetranie" : "Začať vetranie", `data-action="${ventilationActive ? "phase_vent_end" : "phase_vent_start"}" ${disabled ? "disabled" : ""}`, ventilationActive ? "Ukončiť aktuálne vetranie; ochrana kontaktu okna zostáva nadradená." : "Začať vetranie v nastavenej polohe; ochrana kontaktu okna zostáva nadradená.") : ""}${c.config.shading_enabled ? button("Poloha tienenia", `data-action="shade" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej tieniacej polohy.") : ""}${c.config.ventilation_enabled ? button("Vetracia poloha", `data-action="ventilate" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej vetracej polohy.") : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
+    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p>${c.motion?.direction ? `<p class="motion-status ${c.motion.simulated ? "simulated" : ""}">${c.motion.simulated ? "Simulovaný pohyb" : c.motion.direction === "opening" ? "Otvára sa…" : "Zatvára sa…"}</p><p class="position-target">Cieľ počas pohybu: <b>${c.motion.target == null ? "Neznámy" : `${esc(c.motion.target)} %`}</b></p>` : c.motion?.status === "moving" ? `<p class="motion-status">Pohyb prebieha</p>` : ""}<p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button(postCloseLockout && closeReleaseReady ? "↓ Zatvoriť · jednorazovo" : "↓ Zatvoriť", `data-action="close" ${closeDisabled ? "disabled" : ""}`, postCloseLockout ? (closeReleaseReady ? "Vedome zatvoriť a jednorazovo ukončiť ochranu; kontakt je potvrdene zatvorený." : "Čaká sa na potvrdenie zatvoreného kontaktu.") : "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}${c.config.shading_enabled || c.config.ventilation_enabled ? `<div class="phase-controls">${c.config.shading_enabled ? button(shadingActive ? "Ukončiť tienenie dnes" : "Začať tienenie teraz", `data-action="${shadingActive ? "phase_shade_end" : "phase_shade_start"}" ${disabled ? "disabled" : ""}`, shadingActive ? "Ukončiť aktuálne tienenie a zabrániť jeho opätovnému začatiu dnes." : "Začať tienenie hneď; platí do jeho bežného ukončenia alebo do konca dňa.", "phase-action") : ""}${c.config.ventilation_enabled ? button(ventilationActive ? "Ukončiť vetranie" : "Začať vetranie", `data-action="${ventilationActive ? "phase_vent_end" : "phase_vent_start"}" ${disabled ? "disabled" : ""}`, ventilationActive ? "Ukončiť aktuálne vetranie; ochrana kontaktu okna zostáva nadradená." : "Začať vetranie v nastavenej polohe; ochrana kontaktu okna zostáva nadradená.", "phase-action") : ""}</div>` : ""}</div>${lockoutNote}<div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, positionDisabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section>${this._predictionBlock(c)}</div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button("Poloha tienenia", `data-action="shade" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej tieniacej polohy.") : ""}${c.config.ventilation_enabled ? button("Vetracia poloha", `data-action="ventilate" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej vetracej polohy.") : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
   }
   async _loadPrediction() {
     const c = this._controllers.get(this._selected);
@@ -638,7 +779,7 @@ export class CCAZaluziePanel extends HTMLElement {
       if (this._predictionInFlight.get(c.entry_id) === key)
         this._predictionInFlight.delete(c.entry_id);
       if (this._selected === c.entry_id && this._view === "overview")
-        this._render();
+        this._render(true);
     }
   }
 
@@ -797,7 +938,7 @@ export class CCAZaluziePanel extends HTMLElement {
               });
         })()
       : "—";
-    return `<section class="card pad"><div class="card-head"><h3>Vypočítaný ďalší pohyb</h3><span class="badge ${event?.status !== "computed" ? "amber" : ""}">${esc(status)}</span></div><div class="next-time">${esc(eventTime)}</div><div class="next-title">${esc(event?.type ? eventNames[event.type] || event.type : "Bez vypočítaného pohybu")}</div><p class="next-reason">${detail}</p>${solarRows || sensorRows || conditionRows ? `<div class="prediction-conditions">${solarRows}${sensorRows}${conditionRows}</div>` : ""}${assumptions}<p class="prediction-footnote">Čas vychádza z aktuálnych nastavení a výpočtu; pri neznámych budúcich vstupoch je podmienený.</p></section>`;
+    return `<section class="card pad"><div class="card-head"><h3>Vypočítaný ďalší pohyb</h3><span class="badge ${event?.status !== "computed" ? "amber" : ""}">${esc(status)}</span></div><div class="next-time">${esc(eventTime)}</div><div class="next-title">${esc(event?.type ? this._actionLabel(event) : "Bez vypočítaného pohybu")}</div><p class="next-reason">${detail}</p>${solarRows || sensorRows || conditionRows ? `<div class="prediction-conditions">${solarRows}${sensorRows}${conditionRows}</div>` : ""}${assumptions}<p class="prediction-footnote">Čas vychádza z aktuálnych nastavení a výpočtu; pri neznámych budúcich vstupoch je podmienený.</p></section>`;
   }
   _positionControls(c, disabled) {
     const attrs = `data-position min="0" max="100" value="${c.position ?? 50}" ${disabled ? "disabled" : ""}`;
@@ -819,10 +960,11 @@ export class CCAZaluziePanel extends HTMLElement {
         this._view === "overview" &&
         this._historyHours === hours
       )
-        this._render();
+        this._render(true);
     } catch (e) {
       this._history.set(`${id}:${hours}`, { error: e.message || String(e) });
-      if (this._selected === id && this._view === "overview") this._render();
+      if (this._selected === id && this._view === "overview")
+        this._render(true);
     }
   }
   _historyBlock(c) {
@@ -873,7 +1015,7 @@ export class CCAZaluziePanel extends HTMLElement {
         .reverse()
         .map(
           (e) =>
-            `<button class="event-row" data-event="${esc(e.id)}" title="Zobraziť čas, typ a dôvod zaznamenanej udalosti"><small>${clock(e.at)}</small><span class="event-copy">${esc(eventNames[e.type] || e.type)}${e.simulated ? " · SIMULOVANÉ" : ""}<small>${esc(e.details?.reason || e.details?.error || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
+            `<button class="event-row" data-event="${esc(e.id)}" title="Zobraziť čas, typ a dôvod zaznamenanej udalosti"><small>${clock(e.at)}</small><span class="event-copy">${esc(this._eventLabel(e.type, e.details?.mode))}${e.simulated ? " · SIMULOVANÉ" : ""}<small>${esc(e.details?.reason || e.details?.error || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
         )
         .join("") || '<p class="empty-state">Zatiaľ bez udalostí.</p>'
     }</div>${this._simulationTrace(simulated)}</section>`;
@@ -895,7 +1037,7 @@ export class CCAZaluziePanel extends HTMLElement {
     return `<div class="recorded-tracks"><p class="field-hint">Zaznamenané udalosti · značky ukazujú potvrdené časy, bez odhadu trvania režimu.</p>${tracks
       .map(([id, label, filter]) => {
         const subset = events.filter(filter);
-        return `<div class="recorded-track" data-track="${id}"><span>${label}</span><div class="mode-track">${subset.map((e) => `<button class="mode-dot" data-event="${esc(e.id)}" style="left:${Math.max(1, Math.min(99, ((stamp(e.at) - start) / (end - start)) * 100))}%" title="${clock(e.at)} · ${esc(eventNames[e.type] || e.type)} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || e.details?.reason || "")}" aria-label="${label} · ${clock(e.at)} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || eventNames[e.type] || e.type)}">●</button>`).join("") || "<small>Bez zaznamenanej udalosti</small>"}</div></div>`;
+        return `<div class="recorded-track" data-track="${id}"><span>${label}</span><div class="mode-track">${subset.map((e) => `<button class="mode-dot" data-event="${esc(e.id)}" style="left:${Math.max(1, Math.min(99, ((stamp(e.at) - start) / (end - start)) * 100))}%" title="${clock(e.at)} · ${esc(this._eventLabel(e.type, e.details?.mode))} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || e.details?.reason || "")}" aria-label="${label} · ${clock(e.at)} · ${esc(inhibits[e.details?.inhibit] || modes[e.details?.mode] || this._eventLabel(e.type, e.details?.mode))}">●</button>`).join("") || "<small>Bez zaznamenanej udalosti</small>"}</div></div>`;
       })
       .join(
         "",
@@ -942,7 +1084,7 @@ export class CCAZaluziePanel extends HTMLElement {
         .reverse()
         .map(
           (e) =>
-            `<button class="event-row" data-event="${esc(e.id)}" title="Detail simulovanej udalosti"><small>${clock(e.at)}</small><span>${esc(eventNames[e.type] || e.type)} · SIMULOVANÉ<small>${esc(e.details?.error || e.details?.reason || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
+            `<button class="event-row" data-event="${esc(e.id)}" title="Detail simulovanej udalosti"><small>${clock(e.at)}</small><span>${esc(this._eventLabel(e.type, e.details?.mode))} · SIMULOVANÉ<small>${esc(e.details?.error || e.details?.reason || "")}</small></span><b>${e.details?.target != null ? `${esc(e.details.target)} %` : ""}</b></button>`,
         )
         .join("") || "<p>Bez simulovaných udalostí tohto typu.</p>"
     }</details>`;
@@ -1160,10 +1302,12 @@ export class CCAZaluziePanel extends HTMLElement {
       el.hass = this.hass;
       el.disabled = Boolean(this._disabled(f, cfg));
       el.label = f.label;
-      el.value = copy(cfg[f.key]);
+      if (el !== this.shadowRoot.activeElement) el.value = copy(cfg[f.key]);
       if (f.kind === "bool") {
-        el.checked = Boolean(cfg[f.key]);
-        el.indeterminate = this._bulk() && cfg[f.key] == null;
+        if (el !== this.shadowRoot.activeElement)
+          el.checked = Boolean(cfg[f.key]);
+        if (el !== this.shadowRoot.activeElement)
+          el.indeterminate = this._bulk() && cfg[f.key] == null;
       }
       if (f.kind === "entity") {
         el.includeDomains =
@@ -1541,6 +1685,38 @@ export class CCAZaluziePanel extends HTMLElement {
       }
       return;
     }
+    if (event.type === "pointerdown" && event.pointerType === "touch") {
+      const cover = event.target.closest("[data-cover]");
+      if (!cover) return;
+      clearTimeout(this._touchTimer);
+      this._touchTimer = setTimeout(() => {
+        const id = cover.dataset.cover;
+        if (id !== this._selected || this._selection.size > 1) {
+          this._touchClickId = cover.dataset.cover;
+          this._toggleSelection(id);
+          clearTimeout(this._touchClickTimer);
+          this._touchClickTimer = setTimeout(
+            () => (this._touchClickId = null),
+            900,
+          );
+        }
+      }, 550);
+      return;
+    }
+    if (event.type === "pointerup" || event.type === "pointercancel") {
+      clearTimeout(this._touchTimer);
+      return;
+    }
+    if (
+      event.type === "click" &&
+      this._touchClickId &&
+      event.target.closest("[data-cover]")?.dataset.cover === this._touchClickId
+    ) {
+      event.preventDefault();
+      this._touchClickId = null;
+      clearTimeout(this._touchClickTimer);
+      return;
+    }
     if (event.type !== "click") return;
     const b = event.target.closest("button");
     if (!b || b.disabled) return;
@@ -1628,7 +1804,7 @@ export class CCAZaluziePanel extends HTMLElement {
       );
       if (e)
         this._dialog(
-          eventNames[e.type] || e.type,
+          this._eventLabel(e.type, e.details?.mode),
           `<pre>${esc(JSON.stringify({ čas: e.at, ...e.details }, null, 2))}</pre>`,
         );
       return;

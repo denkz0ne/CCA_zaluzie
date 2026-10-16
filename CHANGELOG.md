@@ -1,3 +1,17 @@
+# 2026.12.4
+
+- Keep the side panel's DOM nodes stable during live updates so focused controls,
+  selected covers, drafts and open dialogs survive state pushes.
+- Show active opening or closing from the cover entity or current command, with
+  the target separate from confirmed measured position. Simulation motion is
+  marked explicitly; historical direction is no longer shown as current motion.
+- Compact the automation list, remove the always-visible checkbox row and order
+  arrows, retain the accessible drag grip and keyboard reorder, and add touch
+  long-press multi-selection.
+- Put shading and ventilation phase actions beside the main position controls;
+  replace raw action keys with readable Slovak labels.
+- Resolve issue #17 and document the current panel behavior.
+
 # 2026.12.3
 
 - Add a persisted 30-minute post-close safety lockout for enabled passage contacts.

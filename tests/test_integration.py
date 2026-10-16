@@ -412,6 +412,50 @@ async def test_automatic_source_falls_back_and_conflicts_block_commands(hass, en
     assert calls == []
 
 
+async def test_snapshot_exposes_authoritative_motion_without_changing_feedback(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    hass.states.async_set("cover.blind", "opening", {"current_position": 58})
+    snapshot = controller.snapshot()
+    assert snapshot["position"] == 58
+    assert snapshot["motion"] == {
+        "status": "opening",
+        "direction": "opening",
+        "target": None,
+        "source": "cover_entity",
+        "simulated": False,
+    }
+
+    hass.states.async_set("cover.blind", "open", {"current_position": 58})
+    controller.runtime.command = {"status": "moving", "target": 100}
+    snapshot = controller.snapshot()
+    assert snapshot["position"] == 58
+    assert snapshot["motion"]["direction"] == "opening"
+    assert snapshot["motion"]["target"] == 100
+    assert snapshot["motion"]["source"] == "command"
+
+    controller.runtime.command = {"status": "requested", "target": 0}
+    snapshot = controller.snapshot()
+    assert snapshot["motion"]["status"] == "requested"
+    assert snapshot["motion"]["direction"] is None
+    assert snapshot["motion"]["target"] == 0
+
+
+async def test_snapshot_marks_simulation_motion_explicitly(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    controller.simulation_enabled = True
+    controller.simulation_shadow = {
+        "position": 58,
+        "motion": {"from": 58, "target": 0, "started": 0, "duration": 60},
+    }
+    snapshot = controller.snapshot()
+    assert snapshot["motion"]["direction"] == "closing"
+    assert snapshot["motion"]["target"] == 0
+    assert snapshot["motion"]["source"] == "simulation"
+    assert snapshot["motion"]["simulated"] is True
+
+
 async def test_panel_serves_the_production_module_and_stylesheet(hass, entry, hass_client):
     client = await hass_client()
     response = await client.get("/cca_zaluzie/frontend/cca-zaluzie-panel.js")
