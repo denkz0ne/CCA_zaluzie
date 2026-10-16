@@ -61,6 +61,7 @@ const inhibits = {
   unavailable: "Nedostupná",
   reset: "Reset polohy",
   contact_unknown: "Neznámy kontakt okna",
+  contact_lockout: "Ochrana po zatvorení kontaktu",
   resident_unknown: "Neznámy režim obyvateľa",
   condition: "Podmienka nepovoľuje pohyb",
   window_tilted: "Vyklopené okno blokuje pohyb",

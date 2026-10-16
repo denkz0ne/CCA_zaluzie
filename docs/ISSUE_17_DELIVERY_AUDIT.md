@@ -30,10 +30,18 @@ polohu cieľom ani ju bezdôvodne invertovať. Nebol odoslaný motorový povel.
 - [x] Jednorazové akcie nahradia príslušný prechod, ďalší deň má vlastný plán.
 - [x] Priebežné hodnoty a smer sa menia bez výmeny stabilných prvkov.
 - [x] Desktop, mobil a tmavá téma sú skontrolované na produkčnom paneli.
-- [ ] Testy a GitHub CI prejdú, dokumentácia a nový release sú publikované.
+- [x] Testy a GitHub CI prešli, dokumentácia je aktualizovaná a nový release balík je pripravený.
+
+Publikácia sa overuje samostatne cez [vydanie 2026.12.5](https://github.com/denkz0ne/CCA_zaluzie/releases/tag/2026.12.5)
+a záverečný komentár issue #17; lokálny zelený test sám osebe neznamená nasadenie.
 
 Kontrola živého HA bola iba na čítanie; bez Chrome a bez reštartu.
 
 Lokálne overenie: 185 Python testov prešlo, 4 HA moduly sa bez HA runtime preskočili;
 58 browser testov prešlo. Ruff a Prettier prešli. Desktop, mobil (390 px) a tmavá
 téma boli prezreté zo skutočného produkčného komponentu; bez chýb konzoly a overflow.
+
+GitHub CI: [Tests](https://github.com/denkz0ne/CCA_zaluzie/actions/runs/38925577082)
+— **256 Python testov** na každej HA verzii 2026.9.4 / 2026.10.0 / 2026.10.1,
+**58 browser testov**. [Validate](https://github.com/denkz0ne/CCA_zaluzie/actions/runs/38925577070)
+— HACS a hassfest prešli. Oprava je v [PR #20](https://github.com/denkz0ne/CCA_zaluzie/pull/20).

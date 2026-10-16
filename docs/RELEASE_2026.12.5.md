@@ -25,9 +25,12 @@ prevzatie plánovaného začiatku, prirodzený koniec, potlačenie dnešného op
 nasledujúci deň a nový vetrací cyklus. HA testy sledujú reálne odosielanie
 snapshotov pri začiatku, priebehu a skončení pohybu.
 
-GitHub CI vykonáva HA testy na 2026.9.4, 2026.10.0 a 2026.10.1,
-browser testy, hassfest a HACS. Aktuálny výsledok je pri prepojenom PR v issue
-[#17](https://github.com/denkz0ne/CCA_zaluzie/issues/17).
+GitHub CI: **256 Python testov prešlo** na každej HA verzii 2026.9.4,
+2026.10.0 a 2026.10.1; **58 browser testov prešlo**. Ruff, hassfest a HACS prešli.
+[Tests](https://github.com/denkz0ne/CCA_zaluzie/actions/runs/38925577082) ·
+[Validate](https://github.com/denkz0ne/CCA_zaluzie/actions/runs/38925577070) ·
+[PR #20](https://github.com/denkz0ne/CCA_zaluzie/pull/20).
+Záverečný výsledok je v issue [#17](https://github.com/denkz0ne/CCA_zaluzie/issues/17).
 
 ## Aktualizácia a návrat
 

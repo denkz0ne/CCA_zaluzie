@@ -92,6 +92,15 @@ test("100 live position frames update values without remounts or repeated predic
         },
       };
       window.publish({ controller: c });
+      const other = structuredClone(window.fixture.controllers[1]);
+      other.position = 100 - position;
+      other.motion = {
+        status: "closing",
+        direction: "closing",
+        target: 0,
+        simulated: false,
+      };
+      window.publish({ controller: other });
       await new Promise(requestAnimationFrame);
       if (
         stable.some((selector, i) => root.querySelector(selector) !== refs[i])
