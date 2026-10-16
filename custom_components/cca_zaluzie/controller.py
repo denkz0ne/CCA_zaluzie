@@ -960,6 +960,7 @@ class CoverController:
             decision["pending"] = "drive"
         source_auto = bool(self.config.get("position_source_auto"))
         source_state = self.hass.states.get(self.config["cover_entity"])
+        motion = self._motion_snapshot(source_state, position)
         source_detection = (
             detect_position_source(
                 source_state.attributes
@@ -976,6 +977,7 @@ class CoverController:
             "cover_entity": self.config["cover_entity"],
             "available": available,
             "position": position,
+            "motion": motion,
             "last_movement": deepcopy(self._measured_history.last_movement),
             "position_history": deepcopy(self._measured_history.points),
             **build_presentation(
@@ -1007,6 +1009,60 @@ class CoverController:
             },
             "server_time": self.now(),
         }
+
+    def _motion_snapshot(self, source_state, position: float | None) -> dict[str, Any]:
+        """Describe active motion without changing or estimating measured position."""
+        if source_state and source_state.state in ("opening", "closing"):
+            command = self.runtime.command or {}
+            return {
+                "status": source_state.state,
+                "direction": source_state.state,
+                "target": command.get("target"),
+                "source": "cover_entity",
+                "simulated": False,
+            }
+
+        if self.simulation_enabled:
+            simulated = (self.simulation_shadow or {}).get("motion")
+            if simulated:
+                target = simulated.get("target")
+                origin = simulated.get("from")
+                direction = self._motion_direction(origin, target)
+                return {
+                    "status": direction or "moving",
+                    "direction": direction,
+                    "target": target,
+                    "source": "simulation",
+                    "simulated": True,
+                }
+
+        command = self.runtime.command or {}
+        status = command.get("status")
+        if status == "requested":
+            return {
+                "status": "requested",
+                "direction": None,
+                "target": command.get("target"),
+                "source": "command",
+                "simulated": False,
+            }
+        if status == "moving":
+            target = command.get("target")
+            direction = self._motion_direction(position, target)
+            return {
+                "status": direction or status,
+                "direction": direction,
+                "target": target,
+                "source": "command",
+                "simulated": False,
+            }
+        return {"status": "idle", "direction": None, "target": None, "source": None, "simulated": False}
+
+    def _motion_direction(self, position: float | None, target: float | None) -> str | None:
+        if position is None or target is None or abs(target - position) <= self.config["position_tolerance"]:
+            return None
+        toward_open = (target - position) * (1 if self.config["open_position"] > self.config["close_position"] else -1)
+        return "opening" if toward_open > 0 else "closing"
 
     async def async_panel_history(self, hours: int = 24) -> dict[str, Any]:
         """Return measured history with optional real Recorder samples, without writes."""

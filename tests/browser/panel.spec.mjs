@@ -10,6 +10,233 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("live snapshots patch the panel without replacing focused controls or dialogs", async ({
+  page,
+}) => {
+  const root = page.locator("main.layout");
+  await page.evaluate(() => {
+    const shadow = document.querySelector("cca-zaluzie-panel").shadowRoot;
+    window.rootBefore = shadow.querySelector("main.layout");
+    window.rowBefore = shadow.querySelector('[data-row="one"]');
+  });
+  await page.locator('[data-cover="two"]').click();
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  const name = page.locator('[data-key="name"]');
+  await name.fill("Rozpracovaný názov");
+  await page.evaluate(() => {
+    window.inputBefore = document
+      .querySelector("cca-zaluzie-panel")
+      .shadowRoot.querySelector('[data-key="name"]');
+    for (let i = 0; i < 20; i++) {
+      const controller = structuredClone(window.fixture.controllers[1]);
+      controller.position = i;
+      window.publish({ controller });
+    }
+  });
+  await expect(name).toHaveValue("Rozpracovaný názov");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector("cca-zaluzie-panel")
+            .shadowRoot.querySelector("main.layout") === window.rootBefore &&
+          document
+            .querySelector("cca-zaluzie-panel")
+            .shadowRoot.querySelector('[data-key="name"]') ===
+            window.inputBefore &&
+          document.querySelector("cca-zaluzie-panel").shadowRoot
+            .activeElement === window.inputBefore,
+      ),
+    )
+    .toBe(true);
+
+  await page.getByRole("button", { name: "Prehľad", exact: true }).click();
+  await page.locator("[data-event]").first().click();
+  await expect(page.locator("dialog")).toBeVisible();
+  await page.evaluate(() => {
+    const controller = structuredClone(window.fixture.controllers[1]);
+    controller.position = 41;
+    window.publish({ controller });
+  });
+  await expect(page.locator("dialog")).toBeVisible();
+  await expect(root).toHaveCount(1);
+});
+
+test("server clock-only snapshots do not trigger a redundant panel render", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const panel = document.querySelector("cca-zaluzie-panel");
+    panel.liveRenderCount = 0;
+    const render = panel._render.bind(panel);
+    panel._render = (...args) => {
+      panel.liveRenderCount++;
+      return render(...args);
+    };
+    const controller = structuredClone(panel._controllers.get("one"));
+    controller.server_time += 10;
+    window.publish({ controller });
+  });
+  await page.waitForTimeout(80);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.querySelector("cca-zaluzie-panel").liveRenderCount,
+      ),
+    )
+    .toBe(0);
+});
+
+test("live history updates add correctly namespaced SVG measurement points", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = structuredClone(window.fixture.controllers[0]);
+    const now = Date.now();
+    controller.position_history = [
+      { at: new Date(now - 1000).toISOString(), position: 35, available: true },
+      { at: new Date(now).toISOString(), position: 42, available: true },
+    ];
+    window.publish({ controller });
+  });
+  await expect(page.locator('circle[data-point-position="42"]')).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page
+        .locator("circle[data-measurement]")
+        .evaluateAll((nodes) =>
+          nodes.every(
+            (node) => node.namespaceURI === "http://www.w3.org/2000/svg",
+          ),
+        ),
+    )
+    .toBe(true);
+});
+
+test("active motion is shown separately from confirmed position", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = structuredClone(window.fixture.controllers[0]);
+    controller.position = 58;
+    controller.motion = {
+      status: "opening",
+      direction: "opening",
+      target: 100,
+      source: "cover_entity",
+      simulated: false,
+    };
+    window.publish({ controller });
+  });
+  await expect(page.getByText("Otvára sa…").first()).toBeVisible();
+  await expect(page.locator(".position-number")).toContainText("58");
+  await expect(page.getByText("Cieľ počas pohybu: 100 %")).toBeVisible();
+});
+
+test("phase controls stay beside primary position controls and action keys are localized", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = structuredClone(window.fixture.controllers[0]);
+    controller.config.shading_enabled = true;
+    controller.config.ventilation_enabled = true;
+    controller.runtime.shading = false;
+    controller.decision.mode = "idle";
+    const panel = document.querySelector("cca-zaluzie-panel");
+    panel._predictions.set(panel._selected, {
+      events: [
+        {
+          type: "close",
+          mode: "schedule",
+          status: "computed",
+          target: 0,
+          scenario_at: new Date().toISOString(),
+        },
+      ],
+    });
+    window.publish({ controller });
+    panel._render();
+  });
+  const controls = page.locator(".motor-controls");
+  await expect(
+    controls.getByRole("button", { name: "Začať tienenie teraz" }),
+  ).toBeVisible();
+  await expect(
+    controls.getByRole("button", { name: "Začať vetranie" }),
+  ).toBeVisible();
+  await expect(page.getByText("Večerné zatvorenie").first()).toBeVisible();
+  await expect(page.getByText(/^close$/)).toHaveCount(0);
+});
+
+test("cover list has a compact accessible drag grip without persistent selection row", async ({
+  page,
+}) => {
+  await expect(page.locator(".drag-grip").first()).toHaveAttribute(
+    "aria-label",
+    /Presunúť/,
+  );
+  await expect(page.locator(".select-cover")).toHaveCount(0);
+  await expect(page.locator(".order-buttons")).toHaveCount(0);
+  await expect(
+    page.getByText("Presunúť automatizáciu", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator("[data-cover]").first()).toBeVisible();
+});
+
+test("an old observed direction is not displayed as active motion", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = structuredClone(window.fixture.controllers[0]);
+    controller.last_movement = {
+      direction: "closing",
+      at: new Date().toISOString(),
+    };
+    controller.motion = { status: "idle", direction: null, target: null };
+    window.publish({ controller });
+  });
+  await expect(page.locator('[data-direction="closing"]')).toHaveCount(0);
+});
+
+test("touch long press adds a second cover to the multi-selection", async ({
+  page,
+}) => {
+  await page.locator('[data-cover="two"]').dispatchEvent("pointerdown", {
+    pointerType: "touch",
+    pointerId: 7,
+    isPrimary: true,
+    button: 0,
+  });
+  await page.waitForTimeout(600);
+  await page.locator('[data-cover="two"]').dispatchEvent("pointerup", {
+    pointerType: "touch",
+    pointerId: 7,
+    isPrimary: true,
+    button: 0,
+  });
+  await expect(page.locator('[data-row="two"]')).toHaveClass(/multi-selected/);
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
+  await expect(page.locator('[data-key="name"]')).toBeDisabled();
+  await page.getByRole("button", { name: "Prehľad", exact: true }).click();
+  await page.locator('[data-cover="two"]').dispatchEvent("pointerdown", {
+    pointerType: "touch",
+    pointerId: 8,
+    isPrimary: true,
+    button: 0,
+  });
+  await page.waitForTimeout(600);
+  await page.locator('[data-cover="two"]').dispatchEvent("pointerup", {
+    pointerType: "touch",
+    pointerId: 8,
+    isPrimary: true,
+    button: 0,
+  });
+  await expect(page.locator('[data-row="two"]')).not.toHaveClass(
+    /multi-selected/,
+  );
+});
+
 test("history period is selectable", async ({ page }) => {
   await page.getByLabel("Obdobie histórie").selectOption("6");
   await expect(

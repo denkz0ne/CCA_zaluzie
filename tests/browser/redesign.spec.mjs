@@ -92,12 +92,18 @@ test("history reads actual endpoint, preserves gaps and overview requests a live
     )
     .toBe(true);
 });
-test("movement triangle uses observed direction and saved toast expires", async ({
+test("movement triangle uses active direction and saved toast expires", async ({
   page,
 }) => {
   await page.evaluate(() => {
     const c = window.fixture.controllers[0];
-    c.last_movement = { direction: "closing", at: new Date().toISOString() };
+    c.motion = {
+      status: "closing",
+      direction: "closing",
+      target: 0,
+      source: "cover_entity",
+      simulated: false,
+    };
     window.publish({ controller: c });
   });
   await expect(

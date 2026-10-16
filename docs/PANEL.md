@@ -17,7 +17,18 @@ nespustí návrat, pokiaľ nie je zapnuté obnovenie aktuálneho cieľa.
 
 História používa namerané polohy a podľa dostupnosti aj Recorder. Neznáma
 poloha je medzera v grafe. Simulácia ani časový odhad nevytvárajú namerané
-polohy. Trojuholník pri ikone ukazuje posledný potvrdený smer pohybu.
+polohy. Smerová značka pri ikone sa zobrazuje iba počas práve potvrdeného
+pohybu. Cieľ pohybu je samostatný údaj a nemení potvrdenú polohu.
+
+Pri zmene stavu sa panel aktualizuje bez výmeny celého zobrazenia. Otvorené
+detaily, rozpracované nastavenia, výber žalúzií, posuvník aj pozícia zoznamu
+zostanú zachované. Zoznam používa menšie karty a úchyt na hornej hrane; poradie
+možno meniť potiahnutím alebo klávesmi hore/dole, Home a End. Ctrl/Cmd-kliknutie
+vyberie viac položiek; na dotykovom zariadení podrž kartu približne pol sekundy.
+
+Jednorazové začatie a ukončenie tienenia či vetrania je pri hlavných tlačidlách
+otvorenia, zastavenia a zatvorenia. Jednorazové presunutie do tieniacej alebo
+vetracej polohy zostáva medzi ďalšími akciami.
 
 Keď je zapnutá ochrana kontaktu, otvorenie kontaktu po najviac dvojsekundovom
 potvrdení presunie žalúziu do ochrannej polohy. Po potvrdenom zatvorení kontaktu
@@ -33,14 +44,15 @@ interval sa nepoužije.
 
 ## Poradie automatizácií
 
-Na hornej hrane každej karty je zvýraznený pásik s bodkovaným úchytom.
-Potiahni ho na nové miesto; značka vloženia ukáže výsledné umiestnenie.
-Poradie sa uloží pre panel. Na klávesnici zameraj úchyt a použi šípky;
-na dotykovej obrazovke môžeš použiť aj tlačidlá presunu.
+Na hornej hrane každej karty je zvýraznený úchyt. Potiahni ho na nové miesto;
+značka vloženia ukáže výsledné umiestnenie. Poradie sa uloží pre panel. Na
+klávesnici zameraj úchyt a použi šípky alebo Home/End. Na dotyk podrž kartu na
+výber viacerých žalúzií.
 
 ## Hromadná úprava
 
-Pomocou Ctrl/Cmd alebo zaškrtávacích polí vyber viac žalúzií a otvor konfiguráciu.
+Pomocou Ctrl/Cmd-kliknutia alebo podržania karty na dotykovej obrazovke vyber
+viac žalúzií a otvor konfiguráciu.
 Rozdielne hodnoty sa zobrazia ako rôzne hodnoty. Uložia sa iba polia, ktoré
 výslovne upravíš. Neupravené hodnoty zostanú každej žalúzii vlastné.
 

@@ -1,4 +1,4 @@
-# Feature mapping — 2026.12.3
+# Feature mapping — 2026.12.4
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -27,6 +27,8 @@ with Home Assistant's vertical position convention at the service boundary.
 | Full integration discovery and Add flow | Implemented | `integration_type: service`; native dashboard Add route; manifest and browser regression tests |
 | Per-cover dry-run without motor calls | Implemented | Persistent isolated simulation runtime, single motor dispatch gateway, timed shadow position, suppressed native actions and visible panel state; HA and browser tests |
 | Read-only date prediction | Implemented | Production engine on copied state, local date/DST solar geometry, provider forecasts, certainty and assumptions; API and browser tests |
+| Stable live side panel and active motion | Implemented | Keyed DOM patching preserves selected rows, focus, drafts and dialogs; motion uses HA state/current command and keeps measured position separate; browser and controller snapshot tests |
+| Compact automation list and phase controls | Implemented | Hover-highlighted drag handle, keyboard reorder and touch long-press selection; shading/ventilation phase actions beside primary controls; browser tests |
 | Mode correction, exclusive shading/ventilation, phase actions and morning movement merge | Implemented | Internal ±20 percentage-point / 120-second correction session, serialized active phases including contact changes during shading, confirmed 30-minute morning merge and one-shot phase controls; engine and browser tests |
 | Selected-weather stabilization and Force/contact safety | Implemented | Internal asymmetric confirmation based on each cover's selected states; enabled passage lockout prevents Force-close on open or unknown contact; regression tests |
 | Blueprint input_text helper and automation traces | Replaced | Integration-owned storage and structured event/condition history |

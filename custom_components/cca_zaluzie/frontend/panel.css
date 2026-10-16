@@ -214,12 +214,12 @@ svg.icon {
 }
 .cover-list {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 .cover-row {
   display: block;
   text-align: left;
-  padding: 15px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   background: var(--card);
   border-radius: var(--radius);
@@ -231,27 +231,27 @@ svg.icon {
 }
 .cover-row.selected {
   border: 2px solid var(--primary);
-  padding: 14px;
+  padding: 7px 9px;
   background: var(--primary-soft);
 }
 .cover-top {
   display: flex;
-  gap: 11px;
+  gap: 8px;
   align-items: center;
 }
 .cover-top .cover-symbol {
   color: var(--primary);
-  width: 38px;
-  height: 42px;
+  width: 31px;
+  height: 36px;
 }
 .cover-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 650;
   flex: 1;
   line-height: 1.4;
 }
 .cover-number {
-  font-size: 23px;
+  font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.8px;
 }
@@ -259,7 +259,7 @@ svg.icon {
   margin: 10px 0 9px;
 }
 .cover-next {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--secondary);
   display: flex;
   gap: 7px;
@@ -1645,6 +1645,7 @@ dialog::backdrop {
   border-radius: 12px;
   overflow: hidden;
   background: var(--card);
+  position: relative;
 }
 .automation.multi-selected {
   border-color: var(--primary);
@@ -1655,56 +1656,46 @@ dialog::backdrop {
   margin: 0;
   width: 100%;
 }
-.drag-strip {
-  height: 30px;
-  background: var(--primary-soft);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  color: var(--primary);
-}
 .drag-grip {
-  display: flex;
-  gap: 6px;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 17px;
+  width: 52px;
+  border: 0;
+  border-radius: 0 0 8px 8px;
+  background: var(--primary-soft);
+  display: grid;
   align-items: center;
+  justify-items: center;
+  color: var(--primary);
   cursor: grab;
-  padding: 3px 8px;
-  min-width: 0;
-  flex: 1;
-  height: 100%;
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
+  padding: 0;
+  touch-action: none;
+  opacity: 0.72;
+  transition:
+    opacity 0.15s,
+    height 0.15s;
+}
+.automation:hover .drag-grip,
+.drag-grip:focus-visible {
+  height: 22px;
+  opacity: 1;
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 .grip-dots {
-  font-size: 20px;
-  letter-spacing: 1px;
+  font-size: 17px;
+  line-height: 1;
 }
 .drag-grip:active {
   cursor: grabbing;
 }
-.order-buttons {
-  display: flex;
-}
-.order-button {
-  padding: 3px 7px;
-  font-size: 17px;
-}
 .drop-target {
   border-top: 4px solid var(--primary);
   box-shadow: 0 -3px var(--primary-soft);
-}
-.select-cover {
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-top: 1px solid var(--line);
-  color: var(--secondary);
-}
-.select-cover input {
-  accent-color: var(--primary);
 }
 .selection-hint {
   display: block;
@@ -1741,6 +1732,25 @@ dialog::backdrop {
 }
 .movement.closing {
   bottom: -12px;
+}
+.motion-status {
+  margin: 8px 0 0;
+  color: var(--primary);
+  font-weight: 700;
+}
+.motion-status.simulated {
+  color: var(--warning, #b26a00);
+}
+.phase-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.motor.phase-action {
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 13px;
 }
 .position-number {
   font-size: 44px;
