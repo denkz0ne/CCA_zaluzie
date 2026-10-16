@@ -594,6 +594,38 @@ svg.icon {
   color: var(--text);
   font-weight: 500;
 }
+.prediction-conditions {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.prediction-condition {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.prediction-condition strong {
+  color: var(--text);
+  font-weight: 550;
+}
+.prediction-condition span,
+.prediction-footnote {
+  color: var(--secondary);
+}
+.prediction-condition span {
+  text-align: right;
+}
+.prediction-footnote {
+  margin-bottom: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
 .struck {
   text-decoration: line-through;
 }

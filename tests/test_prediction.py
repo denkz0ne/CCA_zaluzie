@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from custom_components.cca_zaluzie.config import validate_config
 from custom_components.cca_zaluzie.model import Reading, Runtime, Snapshot
@@ -43,6 +44,55 @@ def test_prediction_reuses_schedule_and_does_not_mutate_inputs():
     assert all(event["predicted"] is True for event in result["events"])
     assert runtime.to_dict() == before_runtime
     assert snapshot.entities == before_snapshot
+
+
+def test_live_prediction_starts_now_and_reports_solar_values_at_opening():
+    config = validate_config(
+        {
+            "cover_entity": "cover.prediction",
+            "name": "Prediction",
+            "morning_enabled": True,
+            "evening_enabled": False,
+            "morning_early": "05:30",
+            "morning_late": "07:00",
+            "sun_enabled": True,
+            "sun_sensor": "sun.sun",
+            "sun_open": -3,
+            "sun_close": -7.5,
+            "sun_duration": 0,
+        }
+    )
+    start = datetime(2026, 10, 16, 5, 30, tzinfo=ZoneInfo("Europe/Bratislava"))
+    runtime = Runtime()
+    snapshot = Snapshot(
+        entities={
+            "cover.prediction": Reading("closed", {"current_position": 0}),
+            "sun.sun": Reading("below_horizon", {"azimuth": 82.7, "elevation": -18.3}),
+        }
+    )
+
+    result = compute_prediction(
+        config,
+        runtime,
+        snapshot,
+        "Europe/Bratislava",
+        48.15,
+        17.11,
+        start.date(),
+        1,
+        start_at=start,
+        preserve_runtime=True,
+    )
+
+    opening = next(event for event in result["events"] if event["type"] == "open")
+    assert datetime.fromisoformat(opening["scenario_at"]) >= start
+    assert opening["solar"]["elevation"] >= -3
+    assert abs(
+        opening["conditions"]["inputs"]["sun.sun"]["attributes"]["azimuth"]
+        - opening["solar"]["azimuth"]
+    ) < 0.01
+    assert result["current"]["inputs"]["sun.sun"]["attributes"]["azimuth"] == 82.7
+    assert runtime.manual_since is None
 
 
 def test_prediction_has_local_offsets_across_dst_boundary():

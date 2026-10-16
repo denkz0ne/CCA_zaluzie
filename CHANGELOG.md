@@ -1,3 +1,12 @@
+# 2026.12.1
+
+- Restore a live, read-only next-movement calculation in the cover overview.
+- Show current sensor values beside the values and solar azimuth/elevation at the
+  calculated movement time; display the active sun threshold and condition results.
+- Start the scenario from the current time and retain manual protection and other
+  live runtime constraints. Unknown future inputs are identified as assumptions.
+- Keep measured position history alongside the calculated movement view.
+
 # 2026.12.0
 
 - Redesign the complete panel with Home Assistant controls, visible main switches,

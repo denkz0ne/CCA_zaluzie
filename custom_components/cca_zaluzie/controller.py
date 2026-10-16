@@ -12,6 +12,7 @@ from contextlib import suppress
 from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date, timedelta
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
@@ -1014,12 +1015,19 @@ class CoverController:
         result["points"] = sorted(points.values(), key=lambda point: point["at"])[-20000:]
         return result
 
-    async def async_predict(self, start_date: str, days: int = 2) -> dict[str, Any]:
+    async def async_predict(
+        self, start_date: str | None, days: int = 2, *, from_now: bool = False
+    ) -> dict[str, Any]:
         """Return an isolated forecast without calling HA services or mutating state."""
-        try:
-            selected_date = date.fromisoformat(start_date)
-        except (TypeError, ValueError) as error:
-            raise ValueError("Dátum predikcie musí byť vo formáte YYYY-MM-DD") from error
+        start_at = None
+        if from_now:
+            start_at = dt_util.now()
+            selected_date = start_at.date()
+        else:
+            try:
+                selected_date = date.fromisoformat(start_date)
+            except (TypeError, ValueError) as error:
+                raise ValueError("Dátum predikcie musí byť vo formáte YYYY-MM-DD") from error
         if type(days) is not int or not 1 <= days <= 7:
             raise ValueError("Rozsah predikcie musí byť od 1 do 7 dní")
 
@@ -1055,6 +1063,7 @@ class CoverController:
                     "calendar": base.calendar_events,
                     "date": start_date,
                     "days": days,
+                    "from_now": from_now,
                     "cache_minute": int(dt_util.utcnow().timestamp() // 60),
                     "location": [self.hass.config.latitude, self.hass.config.longitude],
                     "timezone": self.hass.config.time_zone,
@@ -1067,15 +1076,19 @@ class CoverController:
             return deepcopy(self._prediction_cache[cache_key])
 
         result = await self.hass.async_add_executor_job(
-            compute_prediction,
-            self._effective_config(),
-            runtime,
-            base,
-            self.hass.config.time_zone,
-            self.hass.config.latitude,
-            self.hass.config.longitude,
-            selected_date,
-            days,
+            partial(
+                compute_prediction,
+                self._effective_config(),
+                runtime,
+                base,
+                self.hass.config.time_zone,
+                self.hass.config.latitude,
+                self.hass.config.longitude,
+                selected_date,
+                days,
+                start_at=start_at,
+                preserve_runtime=from_now,
+            )
         )
         self._prediction_cache[cache_key] = deepcopy(result)
         while len(self._prediction_cache) > 8:

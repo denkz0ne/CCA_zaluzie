@@ -286,6 +286,9 @@ def compute_prediction(
     longitude: float,
     start_date: date,
     days: int = 2,
+    *,
+    start_at: datetime | None = None,
+    preserve_runtime: bool = False,
 ) -> dict[str, Any]:
     """Evaluate minute-by-minute future scenarios without mutating inputs or runtime."""
     if not 1 <= days <= 7:
@@ -293,21 +296,26 @@ def compute_prediction(
     tz = ZoneInfo(timezone_name)
     observer = Observer(latitude=float(latitude), longitude=float(longitude))
     first = datetime.combine(start_date, time.min, tzinfo=tz)
+    if start_at is not None:
+        if start_at.tzinfo is None:
+            raise ValueError("Začiatok predikcie musí obsahovať časové pásmo")
+        first = max(first, start_at.astimezone(tz))
     end = datetime.combine(start_date + timedelta(days=days), time.min, tzinfo=tz)
     current_ts = int(first.timestamp())
     end_ts = int(end.timestamp())
     runtime = Runtime.from_dict(initial_runtime.to_dict())
-    runtime.manual_since = None
-    runtime.manual_position = None
-    runtime.hold_signature = None
-    runtime.hold_explicit = False
-    runtime.pending_dispatch = None
-    runtime.command = None
-    runtime.reset = None
-    runtime.stable.clear()
-    runtime.pending = runtime.pending_since = runtime.pending_due = None
-    runtime.attempts.clear()
-    runtime.expired.clear()
+    if not preserve_runtime:
+        runtime.manual_since = None
+        runtime.manual_position = None
+        runtime.hold_signature = None
+        runtime.hold_explicit = False
+        runtime.pending_dispatch = None
+        runtime.command = None
+        runtime.reset = None
+        runtime.stable.clear()
+        runtime.pending = runtime.pending_since = runtime.pending_due = None
+        runtime.attempts.clear()
+        runtime.expired.clear()
     if config["position_source"] == "drive_time" and runtime.estimated_position is None:
         runtime.estimated_position = config["close_position"]
     entities = deepcopy(base_snapshot.entities)
@@ -320,7 +328,7 @@ def compute_prediction(
         deepcopy(base_snapshot.future_forecasts),
     )
     events: list[dict[str, Any]] = []
-    seen: set[tuple[str, float, str]] = set()
+    seen: dict[tuple[str, float, str], int] = {}
     assumptions_seen: set[str] = set()
     unknown_inputs = [
         entity
@@ -354,8 +362,8 @@ def compute_prediction(
         if decision.target is not None and (moved or shading_changed or decision.inhibit):
             action = decision.action
             key = (action, float(decision.target), moment.date().isoformat())
-            if key not in seen:
-                seen.add(key)
+            previous_index = seen.get(key)
+            if previous_index is None or events[previous_index]["status"] == "blocked":
                 elev, azi, _ = solar
                 uncertain = bool(assumptions)
                 event_assumptions = list(assumptions)
@@ -379,8 +387,7 @@ def compute_prediction(
                 elif status in ("conditional", "blocked") and action in ("shade_start", "shade_end"):
                     retry = config["shade_start_max" if action == "shade_start" else "shade_end_max"]
                     latest = moment + timedelta(seconds=retry) if retry else None
-                events.append(
-                    {
+                event = {
                         "id": f"{int(current_ts)}:{action}:{decision.target:g}",
                         "date": moment.date().isoformat(),
                         "at": moment.isoformat() if status in ("computed", "estimated") else None,
@@ -405,7 +412,13 @@ def compute_prediction(
                         "blocked_by": decision.inhibit,
                         "assumptions": list(dict.fromkeys(event_assumptions)),
                     }
-                )
+                if previous_index is None:
+                    seen[key] = len(events)
+                    events.append(event)
+                elif event["status"] != "blocked":
+                    # A condition that was blocked at the start of its window
+                    # may become actionable later (for example at sunrise).
+                    events[previous_index] = event
                 if moved:
                     if config["position_source"] == "drive_time":
                         runtime.estimated_position = decision.target
@@ -426,6 +439,30 @@ def compute_prediction(
         "days": days,
         "computed_at": datetime.now(tz).isoformat(),
         "events": events,
+        "current": {
+            "inputs": {
+                entity: {
+                    "state": reading.state,
+                    "value": reading.number(),
+                    "attributes": {
+                        key: value
+                        for key in (
+                            "current_position",
+                            "position",
+                            "azimuth",
+                            "elevation",
+                            "temperature",
+                            "rising",
+                        )
+                        if isinstance(
+                            (value := reading.attributes.get(key)),
+                            (int, float, bool),
+                        )
+                    },
+                }
+                for entity, reading in base_snapshot.entities.items()
+            },
+        },
         "assumptions": sorted(assumptions_seen),
         "timezone": timezone_name,
     }

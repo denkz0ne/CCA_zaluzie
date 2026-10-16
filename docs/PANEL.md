@@ -7,9 +7,13 @@ prečo automatika čaká. Tlačidlá otvorenia, STOP a zatvorenia ovládajú jed
 vybranú žalúziu. Režim simulácie má prepínač v konfigurácii; jeho aktívny stav
 zostáva viditeľný aj v prehľade.
 
-Najbližšia akcia je zámer automatizácie. Ak závisí od budúceho svetla, okna
-alebo inej podmienky, presný čas pohybu sa nesľubuje. Koniec ochrany manuálneho
-ovládania sám nespustí návrat, pokiaľ nie je zapnuté obnovenie aktuálneho cieľa.
+Vypočítaný ďalší pohyb používa aktuálny čas, polohu slnka, plán a produkčné
+rozhodovanie integrácie. Prehľad ukazuje aktuálne hodnoty relevantných senzorov,
+vypočítaný čas a hodnoty pri očakávanom pohybe vrátane azimutu a výšky slnka.
+Stavy alebo hodnoty, ktoré v budúcnosti nemožno poznať, sú označené ako
+predpoklady a výsledok ako podmienený scenár. Výpočet nemení runtime, históriu,
+uložené nastavenia ani stav motora. Koniec ochrany manuálneho ovládania sám
+nespustí návrat, pokiaľ nie je zapnuté obnovenie aktuálneho cieľa.
 
 História používa namerané polohy a podľa dostupnosti aj Recorder. Neznáma
 poloha je medzera v grafe. Simulácia ani časový odhad nevytvárajú namerané

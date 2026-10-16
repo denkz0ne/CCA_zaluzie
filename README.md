@@ -6,7 +6,7 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-The installable integration is version **2026.12.0**, for Home Assistant
+The installable integration is version **2026.12.1**, for Home Assistant
 **2026.9.0+**. The minimum is 2026.9; CI checks both the minimum release line
 and the current release. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
@@ -39,9 +39,11 @@ or use selection checkboxes to edit common settings for several covers. Only
 explicitly changed fields are saved; individual names, sensors, physical positions
 and action editors remain protected. Changes made elsewhere are detected before saving.
 
-The next-action card explains scheduled actions and manual protection delays.
-History shows measured positions with unavailable intervals left as gaps;
-simulated/estimated positions are distinct. Simulation controls are in settings.
+The overview calculates the next possible movement from the current settings and
+solar position, and compares current inputs with the values in that scenario.
+Unknown future inputs remain clearly marked as assumptions. History shows
+measured positions with unavailable intervals left as gaps; simulated/estimated
+positions are distinct. Simulation controls are in settings.
 
 Morning/evening use Early/Late windows and optional workday/calendar/sensor
 conditions. Sun shading moves the whole cover to a partial vertical position.

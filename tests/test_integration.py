@@ -650,3 +650,26 @@ async def test_prediction_has_no_ha_side_effects(hass, entry):
     assert calls == []
     assert controller.runtime.to_dict() == before_runtime
     assert controller.history == before_history
+
+
+async def test_live_prediction_keeps_runtime_and_never_dispatches(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    before_runtime = deepcopy(controller.runtime.to_dict())
+    before_history = deepcopy(controller.history)
+    service_calls = []
+    remove_listener = hass.bus.async_listen(
+        EVENT_CALL_SERVICE,
+        lambda event: service_calls.append(event.data),
+    )
+
+    result = await controller.async_predict(None, 2, from_now=True)
+    await hass.async_block_till_done()
+    remove_listener()
+
+    assert result["start_date"] == dt_util.now().date().isoformat()
+    assert result["current"]["inputs"]
+    assert service_calls == []
+    assert calls == []
+    assert controller.runtime.to_dict() == before_runtime
+    assert controller.history == before_history

@@ -253,8 +253,9 @@ async def ws_history(hass, connection, msg):
     {
         vol.Required("type"): "cca_zaluzie/predict",
         vol.Required("entry_id"): str,
-        vol.Required("start_date"): str,
+        vol.Optional("start_date"): str,
         vol.Optional("days", default=2): vol.All(vol.Coerce(int), vol.Range(min=1, max=7)),
+        vol.Optional("from_now", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -262,7 +263,9 @@ async def ws_history(hass, connection, msg):
 async def ws_predict(hass, connection, msg):
     if controller := _get(hass, connection, msg):
         try:
-            result = await controller.async_predict(msg["start_date"], msg["days"])
+            result = await controller.async_predict(
+                msg.get("start_date"), msg["days"], from_now=msg["from_now"]
+            )
             connection.send_result(msg["id"], result)
         except Exception as error:
             connection.send_error(msg["id"], "prediction_failed", str(error))
