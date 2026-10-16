@@ -48,7 +48,7 @@
 - [x] Add HA snapshot coverage for entity motion, requested/moving commands, and explicitly marked simulation.
 - [x] Expose direction/status/target/source independently from measured position.
 - [x] Render direction and target separately; keep estimated/simulated positions labeled and never substitute the target for measured position.
-- [x] Run browser coverage locally; HA lifecycle tests are delegated to the Linux CI matrix because Home Assistant test dependencies are not installed in this Windows workspace.
+- [x] Run browser coverage locally and verify all HA lifecycle tests in the passing Linux CI matrix (2026.9.4, 2026.10.0, 2026.10.1).
 
 ### Task 3: Compact keyed cover list and quick actions
 
@@ -73,6 +73,6 @@
 
 ### Task 5: Verification and delivery
 
-- [ ] Run Python tests, Ruff, Prettier, complete Playwright suite and `git diff --check`.
-- [ ] Review changed files and ensure no motor logic or live HA was touched.
-- [ ] Open a focused PR linked to #17 and wait for GitHub CI; merge/release only under the existing user authorization to resolve issues.
+- [x] Run Python tests in GitHub Actions, Ruff, Prettier, the complete 46-test Playwright suite and `git diff --check`.
+- [x] Review the diff; motor execution logic and live Home Assistant were not touched.
+- [x] Merge focused PR [#18](https://github.com/denkz0ne/CCA_zaluzie/pull/18), pass GitHub Actions, publish [2026.12.4](https://github.com/denkz0ne/CCA_zaluzie/releases/tag/2026.12.4), and close issue #17.
