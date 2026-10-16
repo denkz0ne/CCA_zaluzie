@@ -92,13 +92,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from .const import EVENT_UPDATED
 
         hass.bus.async_fire(EVENT_UPDATED, {"entry_id": entry.entry_id})
-        if not hass.data[DOMAIN]["controllers"]:
-            from homeassistant.components import frontend
-
-            from .const import PANEL_PATH
-
-            frontend.async_remove_panel(hass, PANEL_PATH)
-            hass.data[DOMAIN]["panel_registered"] = False
+        # A temporary unload (options reload or unavailable entry) must keep the
+        # sidebar and mounted panel so selection and unsaved drafts survive.
         return True
     return False
 
@@ -109,6 +104,19 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     from .const import STORAGE_VERSION
 
     await Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()
+    from .const import EVENT_UPDATED
+
+    hass.bus.async_fire(EVENT_UPDATED, {"entry_id": entry.entry_id, "removed": True})
+    if not any(
+        candidate.entry_id != entry.entry_id
+        for candidate in hass.config_entries.async_entries(DOMAIN)
+    ):
+        from homeassistant.components import frontend
+
+        from .const import PANEL_PATH
+
+        frontend.async_remove_panel(hass, PANEL_PATH)
+        hass.data[DOMAIN]["panel_registered"] = False
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

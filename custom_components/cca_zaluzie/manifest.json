@@ -1,6 +1,9 @@
 {
   "domain": "cca_zaluzie",
   "name": "CCA Žalúzie",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@denkz0ne"
   ],
@@ -16,5 +19,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/denkz0ne/CCA_zaluzie/issues",
   "requirements": [],
-  "version": "2026.11.1"
+  "version": "2026.12.0"
 }

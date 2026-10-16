@@ -12,6 +12,7 @@
         },
         "data_description": {
           "cover_entity": "Jedna automatizácia ovláda presne jednu žalúziu.",
+          "name": "Názov, pod ktorým sa žalúzia zobrazí v paneli a nastaveniach.",
           "cover_type": "Markíza a slnečná clona používajú obrátené cieľové polohy podľa CCA."
         }
       },
@@ -19,7 +20,7 @@
         "title": "Ranný a večerný plán",
         "description": "{error}",
         "data": {
-          "time_enabled": "Časové okná",
+          "time_enabled": "Používať čas otvorenia a zatvorenia",
           "morning_enabled": "Ranné otvorenie",
           "evening_enabled": "Večerné zatvorenie",
           "morning_early": "Ráno najskôr · pracovný deň",
@@ -27,7 +28,15 @@
           "evening_early": "Večer najskôr · pracovný deň",
           "evening_late": "Večer najneskôr · pracovný deň"
         },
-        "data_description": {}
+        "data_description": {
+          "time_enabled": "Použije nižšie zadané časy ranného otvorenia a večerného zatvorenia. Podmienky svetla a ostatné ochrany zostávajú súčasťou rozhodovania.",
+          "morning_enabled": "Povolí ranné automatické otvorenie podľa nastavených časov a podmienok.",
+          "evening_enabled": "Povolí večerné automatické zatvorenie podľa nastavených časov a podmienok.",
+          "morning_early": "Určuje najskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "morning_late": "Určuje najneskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_early": "Určuje najskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_late": "Určuje najneskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán."
+        }
       },
       "position_source": {
         "title": "Spätná väzba polohy",
@@ -38,8 +47,9 @@
           "drive_time": "Čas úplnej jazdy"
         },
         "data_description": {
-          "position_source": "Vyber zdroj, ktorý zodpovedá aktuálnej polohe žalúzie.",
-          "drive_time": "Kalibrovaný čas úplnej jazdy. Odhad nie je nameraná poloha."
+          "position_source": "Určuje, odkiaľ integrácia číta polohu. Automatický výber ponúkne toto nastavenie až pri probléme so spätnou väzbou.",
+          "position_sensor": "Senzor s číselnou polohou od 0 do 100 percent, ak ju samotná žalúzia neposkytuje.",
+          "drive_time": "Pri zariadení bez spätnej väzby ide o kalibrovaný čas jazdy. Odhad nie je nameraná poloha."
         }
       }
     },
@@ -60,7 +70,7 @@
           "light": "Svetlo a slnko",
           "shading": "Tienenie",
           "windows": "Okná a vetranie",
-          "manual": "Ručné ovládanie",
+          "manual": "Manuálne ovládanie",
           "resident": "Režimy a obnova",
           "advanced": "Podmienky a akcie",
           "records": "Záznamy"
@@ -87,15 +97,28 @@
           "prevent_lower_close_shaded": "Večer zachovať výšku tienenia"
         },
         "data_description": {
+          "name": "Názov, pod ktorým sa žalúzia zobrazí v paneli a nastaveniach.",
+          "enabled": "Zapne automatické vyhodnocovanie. Po vypnutí môžeš žalúziu naďalej ovládať manuálne.",
           "cover_type": "Markíza a slnečná clona používajú obrátené cieľové polohy podľa CCA.",
-          "drive_time": "Pri zariadení bez spätnej väzby ide o kalibrovaný čas jazdy. Odhad nie je nameraná poloha."
+          "position_source": "Určuje, odkiaľ integrácia číta polohu. Automatický výber ponúkne toto nastavenie až pri probléme so spätnou väzbou.",
+          "position_sensor": "Senzor s číselnou polohou od 0 do 100 percent, ak ju samotná žalúzia neposkytuje.",
+          "open_position": "Cieľová poloha pre nastavenie „Otvorené“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "close_position": "Cieľová poloha pre nastavenie „Zatvorené“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "shade_position": "Cieľová poloha pre nastavenie „Tienenie“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "vent_position": "Cieľová poloha pre nastavenie „Vetranie“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "lockout_position": "Cieľová poloha pre nastavenie „Otvorené okno“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "position_tolerance": "Rozdiel polohy v percentuálnych bodoch, ktorý sa ešte považuje za dosiahnutý cieľ.",
+          "drive_time": "Pri zariadení bez spätnej väzby ide o kalibrovaný čas jazdy. Odhad nie je nameraná poloha.",
+          "movement_timeout": "Ako dlho po povele čakať na potvrdenie pohybu alebo dosiahnutie cieľa.",
+          "prevent_higher_close": "Večerné zatvorenie nesmie pohnúť žalúziou smerom k otvoreniu, ak už je viac zatvorená než nastavený cieľ.",
+          "prevent_lower_close_shaded": "Ak večerný plán ukončí aktívne tienenie, zabráni ďalšiemu pohybu smerom k zatvoreniu."
         }
       },
       "schedule": {
         "title": "Ráno a večer",
         "description": "{error}",
         "data": {
-          "time_enabled": "Časové okná",
+          "time_enabled": "Používať čas otvorenia a zatvorenia",
           "morning_enabled": "Ranné otvorenie",
           "evening_enabled": "Večerné zatvorenie",
           "morning_early": "Ráno najskôr · pracovný deň",
@@ -115,7 +138,27 @@
           "open_once": "Otvoriť automaticky iba raz denne",
           "close_once": "Zatvoriť automaticky iba raz denne"
         },
-        "data_description": {}
+        "data_description": {
+          "time_enabled": "Použije nižšie zadané časy ranného otvorenia a večerného zatvorenia. Podmienky svetla a ostatné ochrany zostávajú súčasťou rozhodovania.",
+          "morning_enabled": "Povolí ranné automatické otvorenie podľa nastavených časov a podmienok.",
+          "evening_enabled": "Povolí večerné automatické zatvorenie podľa nastavených časov a podmienok.",
+          "morning_early": "Určuje najskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "morning_late": "Určuje najneskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "morning_early_free": "Určuje najskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "morning_late_free": "Určuje najneskorší čas otvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_early": "Určuje najskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_late": "Určuje najneskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_early_free": "Určuje najskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "evening_late_free": "Určuje najneskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
+          "workday_sensor": "Senzor pracovného dňa určí dnešné časy. Bez neho sú sobota a nedeľa voľné dni.",
+          "workday_tomorrow": "Senzor pracovného dňa zajtra umožní večer zohľadniť nasledujúci deň.",
+          "calendar_entity": "Kalendár s udalosťami, ktoré určujú čas otvorenia alebo zatvorenia.",
+          "calendar_enabled": "Pri plánovaní použije udalosti zo zvoleného kalendára s uvedenými názvami.",
+          "calendar_open_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas otvorenia.",
+          "calendar_close_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas zatvorenia.",
+          "open_once": "Po splnení ranného otvorenia ho v ten istý deň znovu automaticky neopakuje.",
+          "close_once": "Po splnení večerného zatvorenia ho v ten istý deň znovu automaticky neopakuje."
+        }
       },
       "light": {
         "title": "Svetlo a slnko",
@@ -125,7 +168,7 @@
           "lux_sensor": "Senzor jasu",
           "lux_open": "Jas na otvorenie",
           "lux_close": "Jas na zatvorenie",
-          "lux_hysteresis": "Hysterézia jasu",
+          "lux_hysteresis": "Rozdiel jasu na zrušenie podmienky",
           "lux_duration": "Potvrdenie jasu",
           "sun_enabled": "Používať výšku slnka",
           "sun_sensor": "Slnko",
@@ -139,7 +182,22 @@
           "sun_threshold_mode": "Výpočet hranice výšky slnka"
         },
         "data_description": {
-          "sun_threshold_mode": "Pevná hranica, hodnota senzora alebo senzor plus pevný posun."
+          "lux_enabled": "Otvorenie a zatvorenie bude zohľadňovať nameraný jas a dobu jeho potvrdenia.",
+          "lux_sensor": "Vyber zdroj pre nastavenie „Senzor jasu“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "lux_open": "Jas, pri ktorom možno ráno otvoriť. Vyššia hodnota vyžaduje viac denného svetla.",
+          "lux_close": "Jas, pri ktorom možno večer zatvoriť. Vyššia hodnota dovolí zatvorenie ešte za väčšieho svetla.",
+          "lux_hysteresis": "Rezerva v jase zabraňuje opakovanému zapínaniu a rušeniu podmienky pri malých výkyvoch.",
+          "lux_duration": "Ako dlho musí jas spĺňať podmienku, kým sa uzná za potvrdenú.",
+          "sun_enabled": "Otvorenie a zatvorenie bude zohľadňovať výšku slnka nad obzorom.",
+          "sun_sensor": "Vyber zdroj pre nastavenie „Slnko“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "sun_open": "Výška slnka pre ranné otvorenie; záporná hodnota znamená slnko pod obzorom.",
+          "sun_close": "Výška slnka pre večerné zatvorenie; záporná hodnota znamená slnko pod obzorom.",
+          "sun_open_sensor": "Vyber zdroj pre nastavenie „Vlastná hranica otvorenia“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "sun_close_sensor": "Vyber zdroj pre nastavenie „Vlastná hranica zatvorenia“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "sun_duration": "Ako dlho musí výška slnka spĺňať podmienku, kým sa uzná za potvrdenú.",
+          "sun_direction": "Vyber, či sa má zohľadniť aj stúpanie slnka ráno a klesanie večer.",
+          "light_operator": "Pri voľbe všetkých podmienok musí vyhovovať jas aj slnko; pri voľbe aspoň jednej stačí jedna z nich.",
+          "sun_threshold_mode": "Použije pevnú výšku slnka, hodnotu vybraného senzora alebo hodnotu senzora upravenú o pevný posun."
         }
       },
       "shading": {
@@ -147,18 +205,18 @@
         "description": "{error}",
         "data": {
           "shading_enabled": "Povoliť tienenie",
-          "shade_ignore_time": "Tienenie aj mimo časového okna",
+          "shade_ignore_time": "Tieniť aj mimo bežného času",
           "shade_start_and": "Začiatok · musia platiť všetky",
           "shade_start_or": "Začiatok · aspoň jedna",
           "shade_end_and": "Ukončenie · musia platiť všetky",
           "shade_end_or": "Ukončenie · aspoň jedna",
-          "shade_azimuth_start": "Azimut od",
-          "shade_azimuth_end": "Azimut do",
+          "shade_azimuth_start": "Smer slnka od",
+          "shade_azimuth_end": "Smer slnka do",
           "shade_elevation_min": "Výška slnka od",
           "shade_elevation_max": "Výška slnka do",
           "shade_lux_start": "Jas na začiatok",
           "shade_lux_end": "Jas na ukončenie",
-          "shade_lux_hysteresis": "Hysterézia jasu tienenia",
+          "shade_lux_hysteresis": "Rozdiel jasu na zrušenie podmienky tienenia",
           "shade_start_delay": "Potvrdenie začiatku",
           "shade_end_delay": "Potvrdenie ukončenia",
           "shade_start_max": "Najdlhšie opakovanie začiatku",
@@ -174,9 +232,9 @@
           "temperature2_min": "Hranica teploty 2",
           "forecast_min": "Hranica predpovede",
           "shade_independent_temp": "Nezávislá teplotná hranica",
-          "temperature1_hysteresis": "Hysterézia teploty 1",
-          "temperature2_hysteresis": "Hysterézia teploty 2",
-          "forecast_hysteresis": "Hysterézia predpovede",
+          "temperature1_hysteresis": "Rozdiel teploty 1 na zrušenie podmienky",
+          "temperature2_hysteresis": "Rozdiel teploty 2 na zrušenie podmienky",
+          "forecast_hysteresis": "Rozdiel predpovede na zrušenie podmienky",
           "forecast_type": "Zdroj predpovede",
           "shade_weather": "Podmienky počasia",
           "shade_independent": "Nezávislé tienenie podľa teploty",
@@ -189,11 +247,47 @@
           "prevent_open_shade_end": "Po tienení neotvárať"
         },
         "data_description": {
-          "shade_start_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
-          "shade_start_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
-          "shade_end_and": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
-          "shade_end_or": "Ak vyberieš skupinu AND aj OR, musia platiť všetky AND a aspoň jedna OR.",
-          "forecast_type": "Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav."
+          "shading_enabled": "Povolí automatické tienenie podľa nižšie vybraných podmienok.",
+          "shade_ignore_time": "Dovolí vyhodnocovať tienenie aj mimo bežného času medzi ranným otvorením a večerným zatvorením.",
+          "shade_start_and": "Ak vyberieš skupinu AND aj OR, musia platiť podmienky prvej skupiny a aspoň jedna podmienka druhej skupiny.",
+          "shade_start_or": "Ak vyberieš skupinu AND aj OR, musia platiť podmienky prvej skupiny a aspoň jedna podmienka druhej skupiny.",
+          "shade_end_and": "Ak vyberieš skupinu AND aj OR, musia platiť podmienky prvej skupiny a aspoň jedna podmienka druhej skupiny.",
+          "shade_end_or": "Ak vyberieš skupinu AND aj OR, musia platiť podmienky prvej skupiny a aspoň jedna podmienka druhej skupiny.",
+          "shade_azimuth_start": "Začiatok rozsahu smerov slnka, ktoré dopadajú na okno: sever 0°, východ 90°, juh 180°, západ 270°.",
+          "shade_azimuth_end": "Koniec rozsahu smerov slnka dopadajúcich na okno. Rozsah môže prechádzať cez sever.",
+          "shade_elevation_min": "Hranica pre nastavenie „Výška slnka od“ v stupňoch. Použije sa pri vyhodnocovaní polohy slnka.",
+          "shade_elevation_max": "Hranica pre nastavenie „Výška slnka do“ v stupňoch. Použije sa pri vyhodnocovaní polohy slnka.",
+          "shade_lux_start": "Hranica jasu na začatie tienenia, ak je jas vybraný medzi podmienkami.",
+          "shade_lux_end": "Hranica jasu na ukončenie tienenia, ak je jas vybraný medzi podmienkami.",
+          "shade_lux_hysteresis": "Rezerva pri návrate cez hranicu zabraňuje opakovanému prepínaniu podmienky pri malých výkyvoch hodnoty.",
+          "shade_start_delay": "Ako dlho musia platiť podmienky začiatku tienenia pred jeho spustením.",
+          "shade_end_delay": "Ako dlho musia platiť podmienky ukončenia tienenia pred jeho ukončením.",
+          "shade_start_max": "Najdlhšie obdobie pokusov o potvrdenie začiatku tienenia. Po prekročení sa čaká na nový cyklus podmienok; 0 obmedzenie vypne.",
+          "shade_end_max": "Najdlhšie obdobie pokusov o potvrdenie konca tienenia. Po prekročení sa čaká na nový cyklus podmienok; 0 obmedzenie vypne.",
+          "shade_lux_sensor": "Vyber zdroj pre nastavenie „Jas pre tienenie“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "temperature_sensor1": "Vyber zdroj pre nastavenie „Teplota 1“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "temperature_sensor2": "Vyber zdroj pre nastavenie „Teplota 2“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "forecast_entity": "Vyber zdroj pre nastavenie „Predpoveď počasia“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "forecast_temp_sensor": "Vyber zdroj pre nastavenie „Vlastná predpovedaná teplota“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "shade_custom_sensor": "Vyber zdroj pre nastavenie „Vlastná podmienka“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "shade_alt_entity": "Vyber zdroj pre nastavenie „Spínač alternatívneho tienenia“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "temperature1_min": "Teplotná hranica pre nastavenie „Hranica teploty 1“ v stupňoch Celzia. Použije sa pri vyhodnocovaní vybranej podmienky.",
+          "temperature2_min": "Teplotná hranica pre nastavenie „Hranica teploty 2“ v stupňoch Celzia. Použije sa pri vyhodnocovaní vybranej podmienky.",
+          "forecast_min": "Teplotná hranica pre nastavenie „Hranica predpovede“ v stupňoch Celzia. Použije sa pri vyhodnocovaní vybranej podmienky.",
+          "shade_independent_temp": "Teplotná hranica pre nastavenie „Nezávislá teplotná hranica“ v stupňoch Celzia. Použije sa pri vyhodnocovaní vybranej podmienky.",
+          "temperature1_hysteresis": "Rezerva pri návrate cez hranicu zabraňuje opakovanému prepínaniu podmienky pri malých výkyvoch hodnoty.",
+          "temperature2_hysteresis": "Rezerva pri návrate cez hranicu zabraňuje opakovanému prepínaniu podmienky pri malých výkyvoch hodnoty.",
+          "forecast_hysteresis": "Rezerva pri návrate cez hranicu zabraňuje opakovanému prepínaniu podmienky pri malých výkyvoch hodnoty.",
+          "forecast_type": "Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav.",
+          "shade_weather": "Stavy počasia, pri ktorých vyhovuje podmienka počasia pre tienenie.",
+          "shade_independent": "Dovolí samostatné tienenie podľa teplotnej hranice aj bez bežnej kombinácie podmienok tienenia.",
+          "shade_compare_sensor2": "Pri nezávislom tienení zohľadní aj druhý teplotný senzor.",
+          "shade_hold_hot": "Pri pretrvávajúcej vysokej teplote zachová tienenie aj po skončení ostatných podmienok.",
+          "shade_end_immediate": "Po opustení nastaveného rozsahu slnka ukončí tienenie bez bežného potvrdzovacieho čakania.",
+          "shade_alt_position": "Cieľová poloha pre nastavenie „Alternatívna poloha tienenia“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie.",
+          "shade_once": "Po začatí tienenia ho v ten istý deň znovu automaticky nespustí.",
+          "prevent_shade_end_closed": "Ukončenie tienenia nepohne žalúziou, ktorá už dosiahla zatvorenú polohu.",
+          "prevent_open_shade_end": "Po skončení tienenia zabráni návratu smerom k otvorenej polohe."
         }
       },
       "windows": {
@@ -216,24 +310,37 @@
           "tilted_blocks": "Vyklopené okno blokuje"
         },
         "data_description": {
-          "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia."
+          "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia.",
+          "window_open": "Vyber zdroj pre nastavenie „Kontakt otvoreného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "window_tilted": "Vyber zdroj pre nastavenie „Kontakt vyklopeného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
+          "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
+          "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",
+          "shading_over_ventilation": "Pri súčasne aktívnom tienení a vetraní uprednostní polohu tienenia, pri zachovaní ochrany kontaktov.",
+          "prevent_open_vent_end": "Po skončení vetrania zabráni návratu smerom k otvorenej polohe.",
+          "vent_start_no_delay": "Pri začiatku vetrania vynechá bežné pevné a náhodné oneskorenie pred pohybom.",
+          "vent_return_delay": "Pri návrate po zatvorení okna použije bežné oneskorenie pred pohybom.",
+          "vent_lower_from_above": "Pri vyklopení dovolí znížiť vyššiu aktuálnu polohu na nastavenú polohu vetrania.",
+          "vent_after_shade": "Ak je okno vyklopené aj po skončení tienenia, použije polohu vetrania.",
+          "vent_keep_full_tilt": "Pri zmene kontaktu z otvoreného na vyklopené okno ponechá plné otvorenie žalúzie.",
+          "tilted_blocks": "Automatické akcie, ktoré sa nesmú vykonať pri vyklopenom okne podľa zvolenej ochrany."
         }
       },
       "manual": {
-        "title": "Ručné ovládanie",
+        "title": "Manuálne ovládanie",
         "description": "{error}",
         "data": {
-          "manual_enabled": "Rozpoznať ručný pohyb",
-          "manual_blocks": "Ručný režim blokuje",
-          "manual_reset_time": "Ukončiť ručný režim každý deň o",
-          "manual_reset_daily": "Použiť denné ukončenie",
-          "manual_timeout": "Ukončiť po uplynutí času",
+          "manual_enabled": "Chrániť manuálne ovládanie",
+          "manual_blocks": "Počas ochrany odložiť tieto akcie",
+          "manual_reset_time": "Každý deň ukončiť ochranu o",
+          "manual_reset_daily": "Ukončiť ochranu každý deň",
+          "manual_timeout": "Dĺžka ochrany po manuálnom ovládaní",
           "manual_reset_position_enabled": "Ukončiť pri dosiahnutí polohy",
-          "manual_reset_position": "Poloha ukončenia ručného režimu",
+          "manual_reset_position": "Poloha na ukončenie ochrany",
           "manual_position_dwell": "Výdrž polohy pred ukončením",
-          "manual_return": "Po ukončení nastaviť aktuálny cieľ",
-          "manual_adopt_open": "Ručné otvorenie uznáva ranný plán",
-          "manual_adopt_close": "Ručné zatvorenie uznáva večerný plán",
+          "manual_return": "Po skončení ochrany obnoviť aktuálny cieľ",
+          "manual_adopt_open": "Manuálne otvorenie splní ranný plán",
+          "manual_adopt_close": "Manuálne zatvorenie splní večerný plán",
           "force_recovery": "Po vynútenom povele obnoviť cieľ",
           "force_open": "Entita vynucujúca otvorenie",
           "force_close": "Entita vynucujúca zatvorenie",
@@ -242,7 +349,23 @@
           "force_pause": "Entita vynucujúca pauzu"
         },
         "data_description": {
-          "manual_timeout": "0 vypne ukončenie podľa trvania."
+          "manual_enabled": "Po zistení manuálneho ovládania odloží vybrané automatické akcie, aby neprepísali tvoju polohu.",
+          "manual_blocks": "Vyber, ktoré automatické akcie majú počas ochrany manuálneho ovládania čakať.",
+          "manual_reset_time": "Denný čas ukončenia ochrany, ak je zapnuté jej každodenné ukončenie.",
+          "manual_reset_daily": "Ukončí ochranu manuálneho ovládania každý deň vo vybranom čase.",
+          "manual_timeout": "Ako dlho chrániť polohu po manuálnom ovládaní. Hodnota 0 vypne ukončenie podľa trvania.",
+          "manual_reset_position_enabled": "Ukončí ochranu po dosiahnutí vybranej polohy a uplynutí doby jej potvrdenia.",
+          "manual_reset_position": "Poloha, ktorej dosiahnutie môže ukončiť ochranu manuálneho ovládania.",
+          "manual_position_dwell": "Ako dlho musí žalúzia zostať vo vybranej polohe pred ukončením ochrany.",
+          "manual_return": "Po skončení ochrany znovu overí podmienky a dovolí pohyb na aktuálny cieľ. Pri vypnutí samotné skončenie ochrany pohyb nespustí.",
+          "manual_adopt_open": "Manuálne otvorenie na cieľovú polohu v čase ranného otvárania uzná ako splnený ranný plán.",
+          "manual_adopt_close": "Manuálne zatvorenie na cieľovú polohu v čase večerného zatvárania uzná ako splnený večerný plán.",
+          "force_recovery": "Po skončení vynúteného povelu znovu vyhodnotí bežný cieľ automatizácie.",
+          "force_open": "Vyber zdroj pre nastavenie „Entita vynucujúca otvorenie“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "force_close": "Vyber zdroj pre nastavenie „Entita vynucujúca zatvorenie“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "force_ventilate": "Vyber zdroj pre nastavenie „Entita vynucujúca vetranie“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "force_shade": "Vyber zdroj pre nastavenie „Entita vynucujúca tienenie“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "force_pause": "Vyber zdroj pre nastavenie „Entita vynucujúca pauzu“. Prázdny výber tento voliteľný zdroj nepoužije."
         }
       },
       "resident": {
@@ -260,7 +383,18 @@
           "instance_entity": "Entita povoľujúca automatizáciu",
           "instance_value": "Povoľujúci stav"
         },
-        "data_description": {}
+        "data_description": {
+          "resident_sensor": "Entita aktivujúca osobitný režim, napríklad spánok alebo prítomnosť. Jej aktívny stav obmedzí nižšie vybrané akcie.",
+          "resident_close": "Pri aktivácii osobitného režimu dovolí zatvorenie, ak je povolené večerné zatváranie.",
+          "resident_open": "Po skončení osobitného režimu dovolí znovu vyhodnotiť otvorenie podľa aktuálnych podmienok.",
+          "resident_allow_open": "Dovolí automatické otvorenie aj počas aktívneho osobitného režimu.",
+          "resident_allow_shade": "Dovolí automatické tienenie aj počas aktívneho osobitného režimu.",
+          "resident_allow_vent": "Dovolí automatické vetranie aj počas aktívneho osobitného režimu.",
+          "recovery_enabled": "Po návrate dostupnosti zariadenia dovolí obnoviť aktuálne vypočítanú polohu.",
+          "startup_recovery": "Po štarte Home Assistanta dovolí obnoviť aktuálny cieľ. Vypnuté nastavenie počká na ďalšiu bežnú udalosť.",
+          "instance_entity": "Automatizácia smie vykonať pohyb iba vtedy, keď má táto entita nižšie uvedený stav.",
+          "instance_value": "Presný stav povoľujúcej entity, pri ktorom je automatický pohyb povolený."
+        }
       },
       "advanced": {
         "title": "Podmienky a akcie",
@@ -288,11 +422,34 @@
           "shade_end_conditions": "Koniec tienenia · podmienky",
           "shade_end_before": "Koniec tienenia · akcie pred pohybom",
           "shade_end_after": "Koniec tienenia · akcie po pohybe",
-          "manual_after": "Ručný zásah · akcie",
-          "manual_reset_after": "Koniec ručného režimu · akcie"
+          "manual_after": "Manuálne ovládanie · následné akcie",
+          "manual_reset_after": "Koniec ochrany manuálneho ovládania · následné akcie"
         },
         "data_description": {
-          "custom_action_only": "Namiesto štandardného povelu použije nakonfigurované akcie. Reset vždy používa štandardné close/stop služby."
+          "drive_delay": "Pevné čakanie pred vykonaním automatického pohybu.",
+          "drive_random": "Pridá náhodné čakanie od nuly po túto hodnotu k pevnému oneskoreniu.",
+          "custom_action_only": "Namiesto štandardného povelu použije nakonfigurované akcie. Reset vždy používa štandardné close/stop služby.",
+          "global_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "open_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "open_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "open_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "close_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "close_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "close_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "ventilate_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "ventilate_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "ventilate_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "ventilate_end_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "ventilate_end_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "ventilate_end_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "shade_start_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "shade_start_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "shade_start_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "shade_end_conditions": "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie.",
+          "shade_end_before": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "shade_end_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "manual_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie.",
+          "manual_reset_after": "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie."
         }
       },
       "records": {
@@ -305,7 +462,13 @@
           "retention_days": "Uchovávanie udalostí",
           "history_limit": "Najviac uložených udalostí"
         },
-        "data_description": {}
+        "data_description": {
+          "debug": "Ukladá aj podrobné vyhodnotenia podmienok. Zväčšuje množstvo záznamov.",
+          "logbook": "Zapisuje významné udalosti automatizácie aj do záznamníka Home Assistanta.",
+          "logbook_cover": "Záznamy v záznamníku priradí k ovládanej žalúzii.",
+          "retention_days": "Staršie udalosti sa odstránia po tomto počte dní; platí aj maximálny počet záznamov.",
+          "history_limit": "Horný limit uložených udalostí jednej automatizácie. Po naplnení sa najstaršie odstránia."
+        }
       }
     },
     "error": {

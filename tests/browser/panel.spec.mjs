@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test("history period is selectable", async ({ page }) => {
   await page.getByLabel("Obdobie histórie").selectOption("6");
   await expect(
-    page.getByRole("heading", { name: "Priebeh za posledných 6 hodín" }),
+    page.getByRole("heading", { name: "História polohy a režimov" }),
   ).toBeVisible();
 });
 
@@ -36,7 +36,7 @@ test("removing the selected controller selects a remaining cover", async ({
   page,
 }) => {
   await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
-  await page.evaluate(() => window.publish({ entry_id: "one" }));
+  await page.evaluate(() => window.publish({ entry_id: "one", removed: true }));
   await expect(page.getByLabel("Názov", { exact: true })).toHaveValue(
     "Spálňa · okno",
   );
@@ -49,12 +49,12 @@ test("shows cover state and the persistent automation list", async ({
     page.getByRole("heading", { name: "Žalúzie", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Spálňa · okno/ }),
+    page.locator('[data-cover="two"]'),
   ).toBeVisible();
   await expect(page.getByText("58 %", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: /Spálňa · okno/ }),
+    page.locator('[data-cover="two"]'),
   ).toBeVisible();
 });
 
@@ -62,12 +62,12 @@ test("retains separate drafts across covers and sections", async ({ page }) => {
   await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
   await page.getByLabel("Názov", { exact: true }).fill("Môj balkón");
   await page.getByRole("button", { name: "Ráno a večer", exact: true }).click();
-  await page.getByRole("button", { name: /Spálňa · okno/ }).click();
+  await page.locator('[data-cover="two"]').click();
   await page.getByRole("button", { name: "Žalúzia", exact: true }).click();
   await expect(page.getByLabel("Názov", { exact: true })).toHaveValue(
     "Spálňa · okno",
   );
-  await page.getByRole("button", { name: /Obývačka · balkón/ }).click();
+  await page.locator('[data-cover="one"]').click();
   await expect(page.getByLabel("Názov", { exact: true })).toHaveValue(
     "Môj balkón",
   );
@@ -111,6 +111,9 @@ test("a rejected save keeps the draft and reports the server error", async ({
 
 test("reset shows countdown and can be cancelled", async ({ page }) => {
   await page.getByRole("button", { name: "Reset polohy", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Spustiť reset", exact: true })
+    .click();
   await expect(
     page.getByText("Výdrž na doraze", { exact: false }),
   ).toBeVisible();
@@ -122,7 +125,7 @@ test("reset shows countdown and can be cancelled", async ({ page }) => {
 
 test("motor errors are visible without a success toast", async ({ page }) => {
   await page.evaluate(() => (window.failAction = true));
-  await page.getByRole("button", { name: "Zatvoriť", exact: true }).click();
+  await page.getByRole("button", { name: "↓ Zatvoriť", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
     "Žalúzia nie je dostupná",
   );
@@ -229,10 +232,7 @@ test("dry-run status is conspicuous and can be turned off per cover", async ({
     page.getByText("SIMULÁCIA — motor je zablokovaný"),
   ).toBeVisible();
   await expect(page.getByText("Simulovaná poloha: 42 %")).toBeVisible();
-  await page.getByLabel("Filtrovať simuláciu").selectOption("would_dispatch");
-  await expect(
-    page.getByText("Simulácia: motorový povel by sa odoslal"),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
   await page
     .getByRole("button", { name: "Vypnúť simuláciu", exact: true })
     .click();
@@ -240,34 +240,21 @@ test("dry-run status is conspicuous and can be turned off per cover", async ({
     .poll(() =>
       page.evaluate(() =>
         window.calls.some(
-          (call) =>
-            call.type === "cca_zaluzie/control" &&
-            call.action === "simulation_off" &&
-            call.entry_id === "one",
+          (c) =>
+            c.type === "cca_zaluzie/control" && c.action === "simulation_off",
         ),
       ),
     )
     .toBe(true);
 });
 
-test("prediction can be requested for a selected future date and week", async ({
+test("prediction is not requested by the production overview", async ({
   page,
 }) => {
-  await page.getByLabel("Dátum predikcie").fill("2026-10-22");
-  await page.getByLabel("Rozsah predikcie").selectOption("7");
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.calls.some(
-          (call) =>
-            call.type === "cca_zaluzie/predict" &&
-            call.start_date === "2026-10-22" &&
-            call.days === 7,
-        ),
-      ),
-    )
-    .toBe(true);
-  await expect(
-    page.getByText("Predikcia je scenár podľa uložených pravidiel"),
-  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.calls.some((c) => c.type === "cca_zaluzie/predict"),
+    ),
+  ).toBe(false);
+  await expect(page.getByText("Predikcia", { exact: true })).toHaveCount(0);
 });

@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,13 +15,20 @@ spec = importlib.util.spec_from_file_location(
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
+bulk_spec = importlib.util.spec_from_file_location("cca_demo_config.bulk", root / "custom_components/cca_zaluzie/bulk.py")
+module.__path__ = []
+sys.modules["cca_demo_config.config"] = module
+bulk = importlib.util.module_from_spec(bulk_spec)
+sys.modules[bulk_spec.name] = bulk
+bulk_spec.loader.exec_module(bulk)
+now = datetime.now(timezone.utc)
 controllers = []
 for key, name, entity, position in [
     ("one", "Obývačka · balkón", "cover.one", 58),
     ("two", "Spálňa · okno", "cover.two", 100),
     ("three", "Kuchyňa · okno", "cover.three", 30),
 ]:
-    config = module.validate_config({"cover_entity": entity, "name": name})
+    config = module.validate_config({"cover_entity": entity, "name": name, "morning_early": "06:30" if key == "one" else "07:00"})
     controllers.append(
         {
             "entry_id": key,
@@ -29,6 +37,7 @@ for key, name, entity, position in [
             "position": position,
             "available": True,
             "config": config,
+            "config_revision": bulk.config_revision(config),
             "decision": {
                 "target": 58,
                 "mode": "shading",
@@ -50,19 +59,24 @@ for key, name, entity, position in [
             "events": [
                 {
                     "id": "example",
-                    "at": "2026-10-11T12:42:00+00:00",
+                    "at": (now-timedelta(minutes=20)).isoformat(),
                     "type": "command_completed",
                     "details": {"target": 58, "observed": 58},
                 }
             ],
             "sensors": {entity: {"state": "open", "attributes": {"current_position": position}}},
-            "server_time": 1791723600,
+            "server_time": now.timestamp(),
+            "last_movement": {"direction": "closing", "at": now.isoformat()},
+            "next_action": {"action":"close", "label":"Večerné zatvorenie", "target":0, "at":(now+timedelta(minutes=30)).isoformat(), "scheduled_at":(now-timedelta(minutes=5)).isoformat(), "status":"blocked", "blocked_by":"manual", "blocked_until":(now+timedelta(minutes=30)).isoformat(), "detail":"Pôvodný večerný plán čaká na skončenie ochrany manuálneho ovládania. Pred pohybom sa znova overia podmienky."},
+            "explanation": {"title":"Prečo je žalúzia v tejto polohe?", "summary":"Manuálne ovládanie zmenilo polohu. Automatika tento zásah rešpektuje do skončenia ochrany.", "details":["Aktívna ochrana manuálneho ovládania.","Návrat k automatickému cieľu je povolený."]},
         }
     )
 fixture = {
-    "version": "2026.10.2",
+    "version": "2026.12.0",
+    "order": [c["entry_id"] for c in controllers],
+    "order_revision": 0,
     "groups": module.GROUPS,
-    "fields": {key: value.public() for key, value in module.FIELDS.items()},
+    "fields": {key: {**value.public(), "bulk_editable": key in bulk.BULK_EDITABLE} for key, value in module.FIELDS.items()},
     "controllers": controllers,
 }
 (root / "tests/browser/fixture.json").write_text(

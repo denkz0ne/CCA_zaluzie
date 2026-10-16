@@ -40,13 +40,70 @@
           window.calls.push(structuredClone(msg));
           if (msg.type === "cca_zaluzie/list")
             return structuredClone(window.fixture);
-          if (msg.type === "cca_zaluzie/predict")
+          if (msg.type === "cca_zaluzie/history")
             return {
-              start_date: msg.start_date,
-              days: msg.days,
-              computed_at: new Date().toISOString(),
-              events: [],
+              points: [
+                {
+                  at: new Date(
+                    Date.now() - msg.hours * 3600000 + 300000,
+                  ).toISOString(),
+                  position: 0,
+                  available: true,
+                },
+                {
+                  at: new Date(
+                    Date.now() - msg.hours * 3600000 + 1800000,
+                  ).toISOString(),
+                  position: 100,
+                  available: true,
+                },
+                {
+                  at: new Date(Date.now() - msg.hours * 1800000).toISOString(),
+                  position: 58,
+                  available: true,
+                },
+                {
+                  at: new Date(Date.now() - 3600000).toISOString(),
+                  position: 58,
+                  available: true,
+                },
+                {
+                  at: new Date(Date.now() - 1800000).toISOString(),
+                  position: null,
+                  available: false,
+                },
+                {
+                  at: new Date(Date.now() - 900000).toISOString(),
+                  position: 58,
+                  available: true,
+                },
+                { at: new Date().toISOString(), position: 30, available: true },
+              ],
+              events: window.fixture.controllers.find(
+                (c) => c.entry_id === msg.entry_id,
+              ).events,
+              start: new Date(Date.now() - msg.hours * 3600000).toISOString(),
+              end: new Date().toISOString(),
             };
+          if (msg.type === "cca_zaluzie/reorder") {
+            window.fixture.order = msg.entry_ids;
+            return {
+              order: msg.entry_ids,
+              order_revision: ++window.fixture.order_revision,
+            };
+          }
+          if (msg.type === "cca_zaluzie/configure_bulk") {
+            if (window.failSave) throw Error("Nastavenia boli odmietnuté.");
+            const configs = {};
+            for (const id of msg.entry_ids) {
+              const controller = window.fixture.controllers.find(
+                (c) => c.entry_id === id,
+              );
+              Object.assign(controller.config, msg.patch);
+              configs[id] = structuredClone(controller.config);
+            }
+            return { saved: true, configs };
+          }
           const c = window.fixture.controllers.find(
             (c) => c.entry_id === msg.entry_id,
           );
@@ -60,6 +117,10 @@
           if (msg.type === "cca_zaluzie/control") {
             c.server_time = Date.now() / 1000;
             if (window.failAction) throw new Error("Žalúzia nie je dostupná.");
+            if (msg.action === "simulation_off")
+              c.simulation = { enabled: false };
+            if (msg.action === "simulation_on")
+              c.simulation = { enabled: true };
             if (msg.action === "reset")
               c.runtime.reset = {
                 status: "dwell",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 GROUPS = {
@@ -14,7 +14,7 @@ GROUPS = {
     "light": "Svetlo a slnko",
     "shading": "Tienenie",
     "windows": "Okná a vetranie",
-    "manual": "Ručné ovládanie",
+    "manual": "Manuálne ovládanie",
     "resident": "Režimy a obnova",
     "advanced": "Podmienky a akcie",
     "records": "Záznamy",
@@ -499,6 +499,162 @@ FIELDS["forecast_type"] = Field(
     options=("daily", "hourly", "weather_attributes"),
     help="Denná/hodinová predpoveď používa prvý platný zvolený interval. Atribúty počasia používajú aktuálnu teplotu a stav.",
 )
+
+
+# Keep presentation copy separate from persisted configuration keys and defaults.
+_LABELS = {
+    "time_enabled": "Používať čas otvorenia a zatvorenia",
+    "shade_ignore_time": "Tieniť aj mimo bežného času",
+    "lux_hysteresis": "Rozdiel jasu na zrušenie podmienky",
+    "shade_lux_hysteresis": "Rozdiel jasu na zrušenie podmienky tienenia",
+    "temperature1_hysteresis": "Rozdiel teploty 1 na zrušenie podmienky",
+    "temperature2_hysteresis": "Rozdiel teploty 2 na zrušenie podmienky",
+    "forecast_hysteresis": "Rozdiel predpovede na zrušenie podmienky",
+    "shade_azimuth_start": "Smer slnka od",
+    "shade_azimuth_end": "Smer slnka do",
+    "manual_enabled": "Chrániť manuálne ovládanie",
+    "manual_blocks": "Počas ochrany odložiť tieto akcie",
+    "manual_reset_time": "Každý deň ukončiť ochranu o",
+    "manual_reset_daily": "Ukončiť ochranu každý deň",
+    "manual_timeout": "Dĺžka ochrany po manuálnom ovládaní",
+    "manual_reset_position": "Poloha na ukončenie ochrany",
+    "manual_return": "Po skončení ochrany obnoviť aktuálny cieľ",
+    "manual_adopt_open": "Manuálne otvorenie splní ranný plán",
+    "manual_adopt_close": "Manuálne zatvorenie splní večerný plán",
+    "manual_after": "Manuálne ovládanie · následné akcie",
+    "manual_reset_after": "Koniec ochrany manuálneho ovládania · následné akcie",
+}
+_HELP = {
+    "name": "Názov, pod ktorým sa žalúzia zobrazí v paneli a nastaveniach.",
+    "enabled": "Zapne automatické vyhodnocovanie. Po vypnutí môžeš žalúziu naďalej ovládať manuálne.",
+    "position_source": "Určuje, odkiaľ integrácia číta polohu. Automatický výber ponúkne toto nastavenie až pri probléme so spätnou väzbou.",
+    "position_sensor": "Senzor s číselnou polohou od 0 do 100 percent, ak ju samotná žalúzia neposkytuje.",
+    "position_tolerance": "Rozdiel polohy v percentuálnych bodoch, ktorý sa ešte považuje za dosiahnutý cieľ.",
+    "movement_timeout": "Ako dlho po povele čakať na potvrdenie pohybu alebo dosiahnutie cieľa.",
+    "time_enabled": "Použije nižšie zadané časy ranného otvorenia a večerného zatvorenia. Podmienky svetla a ostatné ochrany zostávajú súčasťou rozhodovania.",
+    "morning_enabled": "Povolí ranné automatické otvorenie podľa nastavených časov a podmienok.",
+    "evening_enabled": "Povolí večerné automatické zatvorenie podľa nastavených časov a podmienok.",
+    "workday_sensor": "Senzor pracovného dňa určí dnešné časy. Bez neho sú sobota a nedeľa voľné dni.",
+    "workday_tomorrow": "Senzor pracovného dňa zajtra umožní večer zohľadniť nasledujúci deň.",
+    "calendar_entity": "Kalendár s udalosťami, ktoré určujú čas otvorenia alebo zatvorenia.",
+    "calendar_enabled": "Pri plánovaní použije udalosti zo zvoleného kalendára s uvedenými názvami.",
+    "calendar_open_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas otvorenia.",
+    "calendar_close_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas zatvorenia.",
+    "lux_enabled": "Otvorenie a zatvorenie bude zohľadňovať nameraný jas a dobu jeho potvrdenia.",
+    "lux_open": "Jas, pri ktorom možno ráno otvoriť. Vyššia hodnota vyžaduje viac denného svetla.",
+    "lux_close": "Jas, pri ktorom možno večer zatvoriť. Vyššia hodnota dovolí zatvorenie ešte za väčšieho svetla.",
+    "lux_hysteresis": "Rezerva v jase zabraňuje opakovanému zapínaniu a rušeniu podmienky pri malých výkyvoch.",
+    "lux_duration": "Ako dlho musí jas spĺňať podmienku, kým sa uzná za potvrdenú.",
+    "sun_enabled": "Otvorenie a zatvorenie bude zohľadňovať výšku slnka nad obzorom.",
+    "sun_open": "Výška slnka pre ranné otvorenie; záporná hodnota znamená slnko pod obzorom.",
+    "sun_close": "Výška slnka pre večerné zatvorenie; záporná hodnota znamená slnko pod obzorom.",
+    "sun_duration": "Ako dlho musí výška slnka spĺňať podmienku, kým sa uzná za potvrdenú.",
+    "sun_direction": "Vyber, či sa má zohľadniť aj stúpanie slnka ráno a klesanie večer.",
+    "sun_threshold_mode": "Použije pevnú výšku slnka, hodnotu vybraného senzora alebo hodnotu senzora upravenú o pevný posun.",
+    "light_operator": "Pri voľbe všetkých podmienok musí vyhovovať jas aj slnko; pri voľbe aspoň jednej stačí jedna z nich.",
+    "shading_enabled": "Povolí automatické tienenie podľa nižšie vybraných podmienok.",
+    "shade_ignore_time": "Dovolí vyhodnocovať tienenie aj mimo bežného času medzi ranným otvorením a večerným zatvorením.",
+    "shade_start_delay": "Ako dlho musia platiť podmienky začiatku tienenia pred jeho spustením.",
+    "shade_end_delay": "Ako dlho musia platiť podmienky ukončenia tienenia pred jeho ukončením.",
+    "shade_start_max": "Najdlhšie obdobie pokusov o potvrdenie začiatku tienenia. Po prekročení sa čaká na nový cyklus podmienok; 0 obmedzenie vypne.",
+    "shade_end_max": "Najdlhšie obdobie pokusov o potvrdenie konca tienenia. Po prekročení sa čaká na nový cyklus podmienok; 0 obmedzenie vypne.",
+    "shade_azimuth_start": "Začiatok rozsahu smerov slnka, ktoré dopadajú na okno: sever 0°, východ 90°, juh 180°, západ 270°.",
+    "shade_azimuth_end": "Koniec rozsahu smerov slnka dopadajúcich na okno. Rozsah môže prechádzať cez sever.",
+    "shade_lux_start": "Hranica jasu na začatie tienenia, ak je jas vybraný medzi podmienkami.",
+    "shade_lux_end": "Hranica jasu na ukončenie tienenia, ak je jas vybraný medzi podmienkami.",
+    "shade_weather": "Stavy počasia, pri ktorých vyhovuje podmienka počasia pre tienenie.",
+    "shade_independent": "Dovolí samostatné tienenie podľa teplotnej hranice aj bez bežnej kombinácie podmienok tienenia.",
+    "shade_compare_sensor2": "Pri nezávislom tienení zohľadní aj druhý teplotný senzor.",
+    "shade_hold_hot": "Pri pretrvávajúcej vysokej teplote zachová tienenie aj po skončení ostatných podmienok.",
+    "shade_end_immediate": "Po opustení nastaveného rozsahu slnka ukončí tienenie bez bežného potvrdzovacieho čakania.",
+    "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
+    "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
+    "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",
+    "tilted_blocks": "Automatické akcie, ktoré sa nesmú vykonať pri vyklopenom okne podľa zvolenej ochrany.",
+    "shading_over_ventilation": "Pri súčasne aktívnom tienení a vetraní uprednostní polohu tienenia, pri zachovaní ochrany kontaktov.",
+    "open_once": "Po splnení ranného otvorenia ho v ten istý deň znovu automaticky neopakuje.",
+    "close_once": "Po splnení večerného zatvorenia ho v ten istý deň znovu automaticky neopakuje.",
+    "shade_once": "Po začatí tienenia ho v ten istý deň znovu automaticky nespustí.",
+    "prevent_higher_close": "Večerné zatvorenie nesmie pohnúť žalúziou smerom k otvoreniu, ak už je viac zatvorená než nastavený cieľ.",
+    "prevent_lower_close_shaded": "Ak večerný plán ukončí aktívne tienenie, zabráni ďalšiemu pohybu smerom k zatvoreniu.",
+    "prevent_shade_end_closed": "Ukončenie tienenia nepohne žalúziou, ktorá už dosiahla zatvorenú polohu.",
+    "prevent_open_shade_end": "Po skončení tienenia zabráni návratu smerom k otvorenej polohe.",
+    "prevent_open_vent_end": "Po skončení vetrania zabráni návratu smerom k otvorenej polohe.",
+    "vent_start_no_delay": "Pri začiatku vetrania vynechá bežné pevné a náhodné oneskorenie pred pohybom.",
+    "vent_return_delay": "Pri návrate po zatvorení okna použije bežné oneskorenie pred pohybom.",
+    "vent_lower_from_above": "Pri vyklopení dovolí znížiť vyššiu aktuálnu polohu na nastavenú polohu vetrania.",
+    "vent_after_shade": "Ak je okno vyklopené aj po skončení tienenia, použije polohu vetrania.",
+    "vent_keep_full_tilt": "Pri zmene kontaktu z otvoreného na vyklopené okno ponechá plné otvorenie žalúzie.",
+    "manual_enabled": "Po zistení manuálneho ovládania odloží vybrané automatické akcie, aby neprepísali tvoju polohu.",
+    "manual_blocks": "Vyber, ktoré automatické akcie majú počas ochrany manuálneho ovládania čakať.",
+    "manual_timeout": "Ako dlho chrániť polohu po manuálnom ovládaní. Hodnota 0 vypne ukončenie podľa trvania.",
+    "manual_reset_daily": "Ukončí ochranu manuálneho ovládania každý deň vo vybranom čase.",
+    "manual_reset_time": "Denný čas ukončenia ochrany, ak je zapnuté jej každodenné ukončenie.",
+    "manual_reset_position_enabled": "Ukončí ochranu po dosiahnutí vybranej polohy a uplynutí doby jej potvrdenia.",
+    "manual_reset_position": "Poloha, ktorej dosiahnutie môže ukončiť ochranu manuálneho ovládania.",
+    "manual_position_dwell": "Ako dlho musí žalúzia zostať vo vybranej polohe pred ukončením ochrany.",
+    "manual_return": "Po skončení ochrany znovu overí podmienky a dovolí pohyb na aktuálny cieľ. Pri vypnutí samotné skončenie ochrany pohyb nespustí.",
+    "manual_adopt_open": "Manuálne otvorenie na cieľovú polohu v čase ranného otvárania uzná ako splnený ranný plán.",
+    "manual_adopt_close": "Manuálne zatvorenie na cieľovú polohu v čase večerného zatvárania uzná ako splnený večerný plán.",
+    "force_recovery": "Po skončení vynúteného povelu znovu vyhodnotí bežný cieľ automatizácie.",
+    "resident_sensor": "Entita aktivujúca osobitný režim, napríklad spánok alebo prítomnosť. Jej aktívny stav obmedzí nižšie vybrané akcie.",
+    "resident_close": "Pri aktivácii osobitného režimu dovolí zatvorenie, ak je povolené večerné zatváranie.",
+    "resident_open": "Po skončení osobitného režimu dovolí znovu vyhodnotiť otvorenie podľa aktuálnych podmienok.",
+    "resident_allow_open": "Dovolí automatické otvorenie aj počas aktívneho osobitného režimu.",
+    "resident_allow_shade": "Dovolí automatické tienenie aj počas aktívneho osobitného režimu.",
+    "resident_allow_vent": "Dovolí automatické vetranie aj počas aktívneho osobitného režimu.",
+    "recovery_enabled": "Po návrate dostupnosti zariadenia dovolí obnoviť aktuálne vypočítanú polohu.",
+    "startup_recovery": "Po štarte Home Assistanta dovolí obnoviť aktuálny cieľ. Vypnuté nastavenie počká na ďalšiu bežnú udalosť.",
+    "instance_entity": "Automatizácia smie vykonať pohyb iba vtedy, keď má táto entita nižšie uvedený stav.",
+    "instance_value": "Presný stav povoľujúcej entity, pri ktorom je automatický pohyb povolený.",
+    "drive_delay": "Pevné čakanie pred vykonaním automatického pohybu.",
+    "drive_random": "Pridá náhodné čakanie od nuly po túto hodnotu k pevnému oneskoreniu.",
+    "debug": "Ukladá aj podrobné vyhodnotenia podmienok. Zväčšuje množstvo záznamov.",
+    "logbook": "Zapisuje významné udalosti automatizácie aj do záznamníka Home Assistanta.",
+    "logbook_cover": "Záznamy v záznamníku priradí k ovládanej žalúzii.",
+    "retention_days": "Staršie udalosti sa odstránia po tomto počte dní; platí aj maximálny počet záznamov.",
+    "history_limit": "Horný limit uložených udalostí jednej automatizácie. Po naplnení sa najstaršie odstránia.",
+}
+
+
+def _field_help(key: str, field: Field) -> str:
+    if key in _HELP:
+        return _HELP[key]
+    if field.help:
+        return field.help.replace(
+            "všetky AND a aspoň jedna OR",
+            "podmienky prvej skupiny a aspoň jedna podmienka druhej skupiny",
+        )
+    if field.kind == "condition":
+        return "Tieto podmienky musia platiť pred príslušným automatickým pohybom. Prázdny zoznam nepridáva ďalšie obmedzenie."
+    if field.kind == "action":
+        return "Vybrané akcie Home Assistanta sa vykonajú pri uvedenej udalosti. Prázdny zoznam nevykoná žiadne doplnkové akcie."
+    if field.kind == "entity":
+        return f"Vyber zdroj pre nastavenie „{field.label}“. Prázdny výber tento voliteľný zdroj nepoužije."
+    if field.kind == "time":
+        edge = "najneskorší" if "late" in key else "najskorší"
+        action = "otvorenia" if key.startswith("morning") else "zatvorenia"
+        return f"Určuje {edge} čas {action} pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán."
+    if key.endswith("_position"):
+        return f"Cieľová poloha pre nastavenie „{field.label}“. Percentá sa riadia polohou zariadenia a zvoleným typom žalúzie."
+    if "hysteresis" in key:
+        return "Rezerva pri návrate cez hranicu zabraňuje opakovanému prepínaniu podmienky pri malých výkyvoch hodnoty."
+    if field.kind == "bool":
+        return f"Zapne pravidlo „{field.label}“ pre túto žalúziu. Po vypnutí sa toto pravidlo neuplatní."
+    if field.kind == "multi":
+        return f"Vyber možnosti pre pravidlo „{field.label}“. Použijú sa iba označené položky."
+    if field.unit == "s":
+        return f"Doba pre nastavenie „{field.label}“. Vyššia hodnota predĺži čakanie."
+    if field.unit == "°C":
+        return f"Teplotná hranica pre nastavenie „{field.label}“ v stupňoch Celzia. Použije sa pri vyhodnocovaní vybranej podmienky."
+    if field.unit == "°":
+        return f"Hranica pre nastavenie „{field.label}“ v stupňoch. Použije sa pri vyhodnocovaní polohy slnka."
+    return f"Určuje hodnotu nastavenia „{field.label}“ pre túto automatizáciu."
+
+
+for _key, _field in FIELDS.items():
+    _field = replace(_field, label=_LABELS.get(_key, _field.label))
+    FIELDS[_key] = replace(_field, help=_field_help(_key, _field))
 
 
 class ConfigError(ValueError):
