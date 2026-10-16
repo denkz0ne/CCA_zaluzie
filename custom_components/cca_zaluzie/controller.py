@@ -1012,6 +1012,14 @@ class CoverController:
 
     def _motion_snapshot(self, source_state, position: float | None) -> dict[str, Any]:
         """Describe active motion without changing or estimating measured position."""
+        if source_state is None or source_state.state in ("unknown", "unavailable"):
+            return {
+                "status": "unavailable",
+                "direction": None,
+                "target": (self.runtime.command or {}).get("target"),
+                "source": "cover_entity",
+                "simulated": False,
+            }
         if source_state and source_state.state in ("opening", "closing"):
             command = self.runtime.command or {}
             return {

@@ -158,12 +158,12 @@ test("phase controls stay beside primary position controls and action keys are l
     window.publish({ controller });
     panel._render();
   });
-  const controls = page.locator(".motor-controls");
+  const controls = page.locator(".phase-controls");
   await expect(
-    controls.getByRole("button", { name: "Začať tienenie teraz" }),
+    controls.getByRole("button", { name: "Spustiť tienenie teraz" }),
   ).toBeVisible();
   await expect(
-    controls.getByRole("button", { name: "Začať vetranie" }),
+    controls.getByRole("button", { name: "Spustiť vetranie teraz" }),
   ).toBeVisible();
   await expect(page.getByText("Večerné zatvorenie").first()).toBeVisible();
   await expect(page.getByText(/^close$/)).toHaveCount(0);
@@ -293,7 +293,7 @@ test("overview exposes one-shot phase controls and sends the matching action", a
     window.publish({ controller });
   });
 
-  await page.getByRole("button", { name: "Začať tienenie teraz" }).click();
+  await page.getByRole("button", { name: "Spustiť tienenie teraz" }).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -316,7 +316,7 @@ test("overview exposes one-shot phase controls and sends the matching action", a
     page.getByRole("button", { name: "Ukončiť tienenie dnes" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Začať vetranie" }),
+    page.getByRole("button", { name: "Spustiť vetranie teraz" }),
   ).toBeVisible();
 });
 

@@ -441,6 +441,27 @@ async def test_snapshot_exposes_authoritative_motion_without_changing_feedback(h
     assert snapshot["motion"]["target"] == 0
 
 
+async def test_live_notifications_include_motion_start_progress_and_final_feedback(hass, entry):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config["manual_enabled"] = False
+    snapshots = []
+    unsubscribe = controller.subscribe(lambda: snapshots.append(controller.snapshot()))
+    for state, position in (("opening", 5), ("opening", 35), ("opening", 70), ("open", 100)):
+        hass.states.async_set("cover.blind", state, {"current_position": position})
+        await hass.async_block_till_done()
+    unsubscribe()
+
+    for position in (5, 35, 70):
+        assert any(
+            snapshot["position"] == position and snapshot["motion"]["direction"] == "opening"
+            for snapshot in snapshots
+        )
+    assert snapshots[-1]["position"] == 100
+    assert snapshots[-1]["motion"]["status"] == "idle"
+    assert calls == []
+
+
 async def test_snapshot_marks_simulation_motion_explicitly(hass, entry):
     config_entry, _ = entry
     controller = config_entry.runtime_data
@@ -454,6 +475,18 @@ async def test_snapshot_marks_simulation_motion_explicitly(hass, entry):
     assert snapshot["motion"]["target"] == 0
     assert snapshot["motion"]["source"] == "simulation"
     assert snapshot["motion"]["simulated"] is True
+
+
+async def test_unavailable_feedback_does_not_report_an_old_command_as_active_motion(hass, entry):
+    config_entry, _ = entry
+    controller = config_entry.runtime_data
+    controller.runtime.command = {"status": "moving", "target": 100}
+    hass.states.async_set("cover.blind", "unavailable")
+    snapshot = controller.snapshot()
+    assert snapshot["position"] is None
+    assert snapshot["motion"]["status"] == "unavailable"
+    assert snapshot["motion"]["direction"] is None
+    assert snapshot["motion"]["target"] == 100
 
 
 async def test_panel_serves_the_production_module_and_stylesheet(hass, entry, hass_client):

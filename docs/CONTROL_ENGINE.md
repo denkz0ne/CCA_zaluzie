@@ -1,6 +1,6 @@
-# Riadenie žalúzií — verzia 2026.12.4
+# Riadenie žalúzií — verzia 2026.12.5
 
-Tento dokument opisuje správanie verzie **2026.12.4**. Každá žalúzia má vlastný
+Tento dokument opisuje správanie verzie **2026.12.5**. Každá žalúzia má vlastný
 stav a rozhodnutie. Automatizácia, prehľad najbližšieho pohybu aj simulácia
 vychádzajú z rovnakého rozhodovacieho jadra. Predikcia nemení stav ani neposiela
 povely; simulácia používa oddelený uložený stav a nevolá služby motora.
@@ -77,7 +77,7 @@ neaktualizuje ani nereštartuje používateľov Home Assistant.
 
 
 
-## Panel a živý stav pohybu — 2026.12.4
+## Panel a živý stav pohybu — 2026.12.5
 
 Panel používa stabilné uzly DOM a pri WebSocket aktualizáciách mení iba rozdiely.
 Výber, otvorené okno detailu, fokus, rozpracované nastavenia a pozícia v zozname
@@ -90,3 +90,11 @@ Zoznam používa kompaktné karty s úchytom na presúvanie, klávesnicovým
 preusporiadaním a výberom viacerých kariet podržaním na dotykovom zariadení.
 Tienenie a vetranie možno spustiť alebo ukončiť vedľa hlavných tlačidiel
 ovládania; volanie služby naďalej prechádza existujúcou bezpečnostnou bránou.
+
+V 2026.12.5 sú štart a koniec samostatné tlačidlá v sekcii pod posuvníkom.
+Začiatok na pokyn nahradí plánovaný začiatok aktuálnej fázy; režim potom skončí
+podľa svojich pravidiel. Ukončenie tienenia zabráni jeho dnešnému opakovaniu.
+Ukončenie vetrania potlačí aktuálny kontaktný cyklus; nový cyklus môže začať
+ďalšie vetranie. Platnosť hraníc sa nemení na trvalý Force stav.
+Pri strate dostupnosti snapshot výslovne označí pohyb ako nedostupný,
+nezachová aktívny smer zo starého povelu a nevymýšľa nameranú polohu.

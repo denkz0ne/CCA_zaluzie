@@ -243,6 +243,58 @@ def test_one_shot_ventilation_start_and_end_are_idempotent():
     assert repeated.mode != "ventilation"
 
 
+def test_early_shading_adopts_natural_start_and_keeps_its_natural_end():
+    cfg = shade_config(
+        shade_start_delay=0, shade_end_delay=0,
+        shade_start_and=["azimuth"], shade_start_or=[],
+        shade_end_and=[], shade_end_or=["azimuth"],
+        shade_azimuth_start=100, shade_azimuth_end=200,
+    )
+    rt = Runtime(phase_latches={"shade_start": NOW.date().isoformat()})
+    early = evaluate(cfg, rt, shaded_world(azimuth=90), NOW.replace(hour=10))
+    assert early.mode == "shading"
+    assert early.target == cfg["shade_position"]
+
+    planned = evaluate(cfg, rt, shaded_world(azimuth=150), NOW.replace(hour=11))
+    assert planned.mode == "shading"
+    assert planned.target == early.target
+    assert "shade_start" not in rt.phase_latches
+
+    ended = evaluate(cfg, rt, shaded_world(azimuth=220), NOW.replace(hour=18))
+    assert not rt.shading
+    assert ended.mode != "shading"
+
+
+def test_early_shading_end_suppresses_today_but_not_tomorrows_plan():
+    cfg = shade_config(shade_start_delay=0, shade_end_delay=0)
+    rt = Runtime(shading=True, phase_latches={"shade_end": NOW.date().isoformat()})
+    for minute in (0, 10, 30):
+        result = evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12, minute=minute))
+        assert not rt.shading
+        assert result.mode != "shading"
+    tomorrow = evaluate(cfg, rt, shaded_world(), NOW.replace(hour=12) + timedelta(days=1))
+    assert rt.shading
+    assert tomorrow.mode == "shading"
+
+
+def test_early_ventilation_end_suppresses_same_tilt_but_a_new_cycle_can_start():
+    cfg = config(
+        time_enabled=False, morning_enabled=False, evening_enabled=False,
+        ventilation_enabled=True, window_tilted="binary_sensor.window",
+        contact_delay=0, contact_state_delay=0,
+    )
+    rt = Runtime(phase_latches={"vent_start": NOW.date().isoformat()})
+    closed = world(**{"binary_sensor.window": Reading("off")})
+    tilted = world(**{"binary_sensor.window": Reading("on")})
+    assert evaluate(cfg, rt, closed, NOW).mode == "ventilation"
+    assert evaluate(cfg, rt, tilted, NOW + timedelta(minutes=10)).mode == "ventilation"
+    rt.phase_latches["vent_end"] = NOW.date().isoformat()
+    for minute in (11, 12, 30):
+        assert evaluate(cfg, rt, tilted, NOW + timedelta(minutes=minute)).mode != "ventilation"
+    evaluate(cfg, rt, closed, NOW + timedelta(minutes=31))
+    assert evaluate(cfg, rt, tilted, NOW + timedelta(minutes=40)).mode == "ventilation"
+
+
 def test_one_shot_ventilation_waits_for_active_shading_to_finish():
     cfg = shade_config(ventilation_enabled=True, shade_start_delay=0)
     rt = Runtime(

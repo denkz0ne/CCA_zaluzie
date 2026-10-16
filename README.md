@@ -6,7 +6,7 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-The installable integration is version **2026.12.4**, for Home Assistant
+The installable integration is version **2026.12.5**, for Home Assistant
 **2026.9.0+**. The minimum is 2026.9; CI checks both the minimum release line
 and the current release. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
@@ -33,9 +33,9 @@ selected cover and survive section/cover switching; Save commits to HA and
 Discard restores the saved settings. Native options also expose advanced HA
 condition/action editors.
 
-Drag the highlighted grip at the top of a cover card to change its order.
-The grip also supports keyboard arrows and explicit move buttons. Ctrl/Cmd-click
-or use selection checkboxes to edit common settings for several covers. Only
+Drag the small grip on the top edge of a cover card to change its order.
+The grip also supports arrow keys, Home and End. Ctrl/Cmd-click or long-press
+on a touch screen to edit common settings for several covers. Only
 explicitly changed fields are saved; individual names, sensors, physical positions
 and action editors remain protected. Changes made elsewhere are detected before saving.
 
