@@ -732,6 +732,8 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         vent_started
         and not vent_ended
         and cfg["ventilation_enabled"]
+        and not rt.shading
+        and rt.transition_action != "shade_end"
         and window != "open"
         and not contact_unknown
     ):
@@ -780,13 +782,11 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     if (
         force == "force_close"
         and cfg["ventilation_enabled"]
-        and (cfg["window_open"] or cfg["window_tilted"])
+        and cfg["contact_lockout_enabled"]
+        and cfg["window_open"]
     ):
-        if (
-            cfg["contact_lockout_enabled"]
-            and cfg["window_open"]
-            and window == "open"
-        ):
+        raw_open_contact = snap.get(cfg["window_open"]).boolean() is True
+        if window == "open" or raw_open_contact:
             force_contact_blocked = True
             target, mode, action, reason = (
                 cfg["lockout_position"],
@@ -795,7 +795,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                 "Otvorený priechod má prednosť pred vynúteným zatvorením",
             )
             suppressed.append(force)
-        elif contact_unknown:
+        elif snap.get(cfg["window_open"]).boolean() is None:
             force_contact_blocked = True
     activated_at = activated_at if candidates else None
     if rt.last_force != force or rt.force_changed_at != activated_at:

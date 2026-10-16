@@ -222,6 +222,29 @@ def test_one_shot_ventilation_start_and_end_are_idempotent():
     assert repeated.mode != "ventilation"
 
 
+def test_one_shot_ventilation_waits_for_active_shading_to_finish():
+    cfg = shade_config(ventilation_enabled=True, shade_start_delay=0)
+    rt = Runtime(
+        shading=True,
+        phase_latches={
+            "shade_end": NOW.date().isoformat(),
+            "vent_start": NOW.date().isoformat(),
+        },
+    )
+
+    shade_end = evaluate(cfg, rt, shaded_world(), NOW)
+
+    assert shade_end.action == "shade_end"
+    assert shade_end.mode != "ventilation"
+    assert rt.phase_latches["vent_start"] == NOW.date().isoformat()
+
+    rt.transition_action = None
+    after_shading = evaluate(cfg, rt, world(), NOW + timedelta(minutes=1))
+
+    assert after_shading.mode == "ventilation"
+    assert after_shading.target == cfg["vent_position"]
+
+
 def test_morning_open_is_logically_merged_with_confirmed_shading_within_30_minutes():
     cfg = config(
         shading_enabled=True,
@@ -423,6 +446,71 @@ def test_unknown_passage_contact_blocks_force_close():
     decision = evaluate(cfg, Runtime(), snap, NOW)
 
     assert decision.inhibit == "contact_unknown"
+
+
+def test_open_passage_contact_blocks_force_close_before_debounce_finishes():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        contact_delay=60,
+        contact_state_delay=0,
+        force_close="input_boolean.force_close",
+    )
+    snap = world(
+        **{
+            "binary_sensor.passage": Reading("on", changed_at=NOW.timestamp() - 1),
+            "input_boolean.force_close": Reading("on", changed_at=100),
+        }
+    )
+
+    decision = evaluate(cfg, Runtime(), snap, NOW)
+
+    assert decision.mode == "window_lockout"
+    assert decision.target == cfg["lockout_position"]
+    assert "force_close" in decision.suppressed
+
+
+def test_unknown_ordinary_contact_does_not_change_force_close_priority():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=False,
+        window_open="binary_sensor.window",
+        force_close="input_boolean.force_close",
+    )
+    snap = world(
+        **{
+            "binary_sensor.window": Reading("unknown"),
+            "input_boolean.force_close": Reading("on", changed_at=100),
+        }
+    )
+
+    decision = evaluate(cfg, Runtime(), snap, NOW)
+
+    assert decision.mode == "force_close"
+    assert decision.inhibit is None
+
+
+def test_unknown_tilt_contact_does_not_override_force_close_when_passage_is_closed():
+    cfg = config(
+        ventilation_enabled=True,
+        contact_lockout_enabled=True,
+        window_open="binary_sensor.passage",
+        window_tilted="binary_sensor.tilt",
+        force_close="input_boolean.force_close",
+    )
+    snap = world(
+        **{
+            "binary_sensor.passage": Reading("off"),
+            "binary_sensor.tilt": Reading("unknown"),
+            "input_boolean.force_close": Reading("on", changed_at=100),
+        }
+    )
+
+    decision = evaluate(cfg, Runtime(), snap, NOW)
+
+    assert decision.mode == "force_close"
+    assert decision.inhibit is None
 
 
 def test_disabled_ventilation_ignores_all_contacts():
