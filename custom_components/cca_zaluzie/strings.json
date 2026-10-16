@@ -131,10 +131,6 @@
           "evening_late_free": "Večer najneskôr · voľný deň",
           "workday_sensor": "Pracovný deň dnes",
           "workday_tomorrow": "Pracovný deň zajtra",
-          "calendar_entity": "Kalendár",
-          "calendar_enabled": "Riadiť podľa kalendára",
-          "calendar_open_title": "Názov udalosti otvorenia",
-          "calendar_close_title": "Názov udalosti zatvorenia",
           "open_once": "Otvoriť automaticky iba raz denne",
           "close_once": "Zatvoriť automaticky iba raz denne"
         },
@@ -152,10 +148,6 @@
           "evening_late_free": "Určuje najneskorší čas zatvorenia pre uvedený typ dňa. Skutočný pohyb závisí aj od zapnutých podmienok a ochrán.",
           "workday_sensor": "Senzor pracovného dňa určí dnešné časy. Bez neho sú sobota a nedeľa voľné dni.",
           "workday_tomorrow": "Senzor pracovného dňa zajtra umožní večer zohľadniť nasledujúci deň.",
-          "calendar_entity": "Kalendár s udalosťami, ktoré určujú čas otvorenia alebo zatvorenia.",
-          "calendar_enabled": "Pri plánovaní použije udalosti zo zvoleného kalendára s uvedenými názvami.",
-          "calendar_open_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas otvorenia.",
-          "calendar_close_title": "Názov kalendárovej udalosti, ktorej začiatok určí čas zatvorenia.",
           "open_once": "Po splnení ranného otvorenia ho v ten istý deň znovu automaticky neopakuje.",
           "close_once": "Po splnení večerného zatvorenia ho v ten istý deň znovu automaticky neopakuje."
         }
@@ -164,12 +156,6 @@
         "title": "Svetlo a slnko",
         "description": "{error}",
         "data": {
-          "lux_enabled": "Používať jas",
-          "lux_sensor": "Senzor jasu",
-          "lux_open": "Jas na otvorenie",
-          "lux_close": "Jas na zatvorenie",
-          "lux_hysteresis": "Rozdiel jasu na zrušenie podmienky",
-          "lux_duration": "Potvrdenie jasu",
           "sun_enabled": "Používať výšku slnka",
           "sun_sensor": "Slnko",
           "sun_open": "Výška slnka na otvorenie",
@@ -178,16 +164,9 @@
           "sun_close_sensor": "Vlastná hranica zatvorenia",
           "sun_duration": "Potvrdenie výšky slnka",
           "sun_direction": "Smer pohybu slnka",
-          "light_operator": "Kombinácia svetla a slnka",
           "sun_threshold_mode": "Výpočet hranice výšky slnka"
         },
         "data_description": {
-          "lux_enabled": "Otvorenie a zatvorenie bude zohľadňovať nameraný jas a dobu jeho potvrdenia.",
-          "lux_sensor": "Vyber zdroj pre nastavenie „Senzor jasu“. Prázdny výber tento voliteľný zdroj nepoužije.",
-          "lux_open": "Jas, pri ktorom možno ráno otvoriť. Vyššia hodnota vyžaduje viac denného svetla.",
-          "lux_close": "Jas, pri ktorom možno večer zatvoriť. Vyššia hodnota dovolí zatvorenie ešte za väčšieho svetla.",
-          "lux_hysteresis": "Rezerva v jase zabraňuje opakovanému zapínaniu a rušeniu podmienky pri malých výkyvoch.",
-          "lux_duration": "Ako dlho musí jas spĺňať podmienku, kým sa uzná za potvrdenú.",
           "sun_enabled": "Otvorenie a zatvorenie bude zohľadňovať výšku slnka nad obzorom.",
           "sun_sensor": "Vyber zdroj pre nastavenie „Slnko“. Prázdny výber tento voliteľný zdroj nepoužije.",
           "sun_open": "Výška slnka pre ranné otvorenie; záporná hodnota znamená slnko pod obzorom.",
@@ -196,7 +175,6 @@
           "sun_close_sensor": "Vyber zdroj pre nastavenie „Vlastná hranica zatvorenia“. Prázdny výber tento voliteľný zdroj nepoužije.",
           "sun_duration": "Ako dlho musí výška slnka spĺňať podmienku, kým sa uzná za potvrdenú.",
           "sun_direction": "Vyber, či sa má zohľadniť aj stúpanie slnka ráno a klesanie večer.",
-          "light_operator": "Pri voľbe všetkých podmienok musí vyhovovať jas aj slnko; pri voľbe aspoň jednej stačí jedna z nich.",
           "sun_threshold_mode": "Použije pevnú výšku slnka, hodnotu vybraného senzora alebo hodnotu senzora upravenú o pevný posun."
         }
       },
@@ -297,6 +275,7 @@
           "ventilation_enabled": "Povoliť vetranie a kontakty",
           "window_open": "Kontakt otvoreného okna",
           "window_tilted": "Kontakt vyklopeného okna",
+          "contact_lockout_enabled": "Ochrana proti zatvoreniu pri otvorenom kontakte",
           "contact_delay": "Potvrdenie spúšťača kontaktu",
           "contact_state_delay": "Oneskorenie stavu kontaktu",
           "tilted_lockout": "Blokácia pri vyklopení",
@@ -313,6 +292,7 @@
           "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia.",
           "window_open": "Vyber zdroj pre nastavenie „Kontakt otvoreného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
           "window_tilted": "Vyber zdroj pre nastavenie „Kontakt vyklopeného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
+          "contact_lockout_enabled": "Zapne pravidlo „Ochrana proti zatvoreniu pri otvorenom kontakte“ pre túto žalúziu. Po vypnutí sa toto pravidlo neuplatní.",
           "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
           "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
           "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",

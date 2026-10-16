@@ -1,4 +1,4 @@
-# Feature mapping — 2026.11.0
+# Feature mapping — 2026.12.2
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -9,7 +9,7 @@ with Home Assistant's vertical position convention at the service boundary.
 | One independent controller per cover, multiple entries | Implemented | Config flow, stable entities, separate storage; HA lifecycle tests |
 | Blind, shutter, awning and sunshade; position orientation | Implemented | Validated type/target settings; config and regression tests |
 | Automatic measured-position detection with manual fallback, selected sensor, calibrated drive time and tolerance | Implemented | Prefers valid `current_position`, falls back to valid `position`, exposes manual choice on ambiguity/unavailability, blocks unresolved movement; detector, HA lifecycle, motor and browser tests |
-| Morning/evening Early/Late, today/tomorrow workdays, calendar | Implemented | Engine schedule windows and calendar start/end matching; engine and schedule tests |
+| Morning/evening Early/Late, today/tomorrow workdays | Implemented | Engine schedule windows and solar thresholds; retired morning/evening brightness and calendar matching are migrated out of active scheduling |
 | Brightness/sun elevation, stable duration, AND/OR, hysteresis, once per day | Implemented | Separate logical schedule ownership and dispatch; engine and schedule tests |
 | Whole-cover partial-height shading | Implemented | Shading target plus alternate trigger/target; engine tests |
 | Shading geometry, brightness, two temperatures, forecast/weather/custom input | Implemented | Separate start/end predicates, optional AND/OR groups and independent hot-temperature policy; engine tests |
@@ -27,6 +27,8 @@ with Home Assistant's vertical position convention at the service boundary.
 | Full integration discovery and Add flow | Implemented | `integration_type: service`; native dashboard Add route; manifest and browser regression tests |
 | Per-cover dry-run without motor calls | Implemented | Persistent isolated simulation runtime, single motor dispatch gateway, timed shadow position, suppressed native actions and visible panel state; HA and browser tests |
 | Read-only date prediction | Implemented | Production engine on copied state, local date/DST solar geometry, provider forecasts, certainty and assumptions; API and browser tests |
+| Mode correction, exclusive shading/ventilation, phase actions and morning movement merge | Implemented | Internal ±20 percentage-point / 120-second correction session, serialized active phases, confirmed 30-minute morning merge and one-shot phase controls; engine and browser tests |
+| Selected-weather stabilization and Force/contact safety | Implemented | Internal asymmetric confirmation based on each cover's selected states; enabled passage lockout prevents Force-close on open or unknown contact; regression tests |
 | Blueprint input_text helper and automation traces | Replaced | Integration-owned storage and structured event/condition history |
 | Lamella actuator tilt, tilt bands/waits/reposition | Excluded by user | No tilt service or tilt target is sent; tilted-window contact remains supported |
 

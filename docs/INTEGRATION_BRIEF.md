@@ -50,6 +50,21 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
 - The calculation is read-only and preserves manual protection and controller
   runtime. Measured position history remains available beside the prediction.
 
+## 2026.12.2 approved issue #13 behavior
+
+- Active shading and ventilation do not overlap; an active phase finishes before
+  the other can take over. The overview provides one-shot start/end actions.
+- A confirmed shading start within 30 minutes may fulfill the morning opening
+  logically, avoiding an immediate opposite-direction motor movement.
+- Small user corrections are measured from the original mode target. The limit is
+  ±20 percentage points and the fixed edit window is 120 seconds from the first edit.
+- An enabled open-contact lockout blocks Force-close when the contact is open or
+  unknown. Other Force priority and existing Force entities remain supported.
+- Weather changes are stabilized internally according to each cover's selected
+  states. Morning/evening brightness and calendar inputs no longer affect the
+  schedule; legacy entry values are migrated, and a legacy brightness sensor can
+  remain as the optional shading sensor.
+
 ## User goal
 
 Create a Home Assistant custom integration that manages multiple blinds/shutters from one config-flow-driven integration and presents a polished per-cover control dashboard. The behavioral reference is the latest upstream Cover Control Automation (CCA). The visual and functional layout reference is the user's **Svetlo v tme** / **Entity Controller (EC)** integration. This is not an instruction to clone either project's code.

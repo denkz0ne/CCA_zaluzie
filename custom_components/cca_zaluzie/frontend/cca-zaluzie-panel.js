@@ -70,6 +70,7 @@ const inhibits = {
   position_unknown: "Poloha nie je dostupná",
   movement_failed: "Pohyb sa nepotvrdil",
   schedule_window: "Čaká na čas otvorenia alebo zatvorenia",
+  movement_merge: "Ranné otvorenie sa spojí s blízkym tienením",
   recovery_hold: "Po návrate čaká na ďalšiu udalosť",
   stop_hold: "Pohyb zastavený",
   wake_hold: "Čaká na ďalšie ranné podmienky",
@@ -166,17 +167,6 @@ const sections = {
   ],
   light: [
     [
-      "Jas",
-      [
-        "lux_enabled",
-        "lux_sensor",
-        "lux_open",
-        "lux_close",
-        "lux_hysteresis",
-        "lux_duration",
-      ],
-    ],
-    [
       "Slnko",
       [
         "sun_enabled",
@@ -190,7 +180,6 @@ const sections = {
         "sun_direction",
       ],
     ],
-    ["Spojenie pravidiel", ["light_operator"]],
   ],
   shading: [
     [
@@ -596,7 +585,9 @@ export class CCAZaluziePanel extends HTMLElement {
       resetting = ["closing", "dwell", "stopping"].includes(r?.status),
       disabled = this._busy || resetting || !c.available;
     const ex = c.explanation;
-    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p><p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button("↓ Zatvoriť", `data-action="close" ${disabled ? "disabled" : ""}`, "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}</div><div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, disabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section>${this._predictionBlock(c)}</div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button("Tieniť", `data-action="shade" ${disabled ? "disabled" : ""}`) : ""}${c.config.ventilation_enabled ? button("Vetrať", `data-action="ventilate" ${disabled ? "disabled" : ""}`) : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
+    const shadingActive = Boolean(c.runtime?.shading);
+    const ventilationActive = d.mode === "ventilation";
+    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p><p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button("↓ Zatvoriť", `data-action="close" ${disabled ? "disabled" : ""}`, "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}</div><div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, disabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section>${this._predictionBlock(c)}</div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button(shadingActive ? "Ukončiť tienenie dnes" : "Začať tienenie teraz", `data-action="${shadingActive ? "phase_shade_end" : "phase_shade_start"}" ${disabled ? "disabled" : ""}`, shadingActive ? "Ukončiť aktuálne tienenie a zabrániť jeho opätovnému začatiu dnes." : "Začať tienenie hneď; platí do jeho bežného ukončenia alebo do konca dňa.") : ""}${c.config.ventilation_enabled ? button(ventilationActive ? "Ukončiť vetranie" : "Začať vetranie", `data-action="${ventilationActive ? "phase_vent_end" : "phase_vent_start"}" ${disabled ? "disabled" : ""}`, ventilationActive ? "Ukončiť aktuálne vetranie; ochrana kontaktu okna zostáva nadradená." : "Začať vetranie v nastavenej polohe; ochrana kontaktu okna zostáva nadradená.") : ""}${c.config.shading_enabled ? button("Poloha tienenia", `data-action="shade" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej tieniacej polohy.") : ""}${c.config.ventilation_enabled ? button("Vetracia poloha", `data-action="ventilate" ${disabled ? "disabled" : ""}`, "Jednorazovo presunúť žalúziu do nastavenej vetracej polohy.") : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
   }
   async _loadPrediction() {
     const c = this._controllers.get(this._selected);
@@ -677,8 +668,7 @@ export class CCAZaluziePanel extends HTMLElement {
       ? `<div class="prediction-condition"><strong>Slnko teraz</strong><span>Aktuálne: azimut ${currentAzimuth == null ? "?" : fmt(currentAzimuth)}° · výška ${currentElevation == null ? "?" : fmt(currentElevation)}°</span></div>${projectedSolar ? `<div class="prediction-condition"><strong>Slnko pri pohybe</strong><span>Pri pohybe: azimut ${fmt(projectedSolar.azimuth)}° · výška ${fmt(projectedSolar.elevation)}°</span></div>` : ""}${solarRule ? `<div class="prediction-condition"><strong>Podmienka slnka</strong><span>${esc(solarRule)}</span></div>` : ""}`
       : "";
     const inputEntities = [
-      config.lux_enabled && config.lux_sensor,
-      config.shading_enabled && (config.shade_lux_sensor || config.lux_sensor),
+      config.shading_enabled && config.shade_lux_sensor,
       config.shading_enabled && config.temperature_sensor1,
       config.shading_enabled && config.temperature_sensor2,
       config.ventilation_enabled && config.window_open,
@@ -1085,15 +1075,6 @@ export class CCAZaluziePanel extends HTMLElement {
             ],
           ],
           ["Pracovné dni", ["workday_sensor", "workday_tomorrow"]],
-          [
-            "Kalendár",
-            [
-              "calendar_enabled",
-              "calendar_entity",
-              "calendar_open_title",
-              "calendar_close_title",
-            ],
-          ],
         ];
       const used = new Set(blocks.flatMap((b) => b[1]));
       const remaining = Object.values(this._fields)

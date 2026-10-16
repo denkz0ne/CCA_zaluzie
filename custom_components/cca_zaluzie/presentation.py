@@ -10,7 +10,7 @@ import math
 from copy import deepcopy
 from datetime import datetime, timedelta
 
-from .engine import _at, _calendar_bounds, _window
+from .engine import _at, _window
 from .model import Decision, Runtime, Snapshot
 
 LABELS = {
@@ -47,6 +47,7 @@ BLOCKS = {
     "pending_confirmation": "Čaká sa na potvrdenie trvania podmienok.",
     "unowned_target": "Pre tento cieľ nie je povolené automatické riadenie.",
     "schedule_window": "Pohyb čaká na ďalší povolený čas.",
+    "movement_merge": "Ranné otvorenie sa zlúči s blízkym potvrdeným tienením.",
 }
 
 
@@ -110,14 +111,7 @@ def build_presentation(
                 early, late, known = _window(cfg, snap, day, action)
                 if not known:
                     continue
-                bounds = (
-                    _calendar_bounds(cfg, snap, day, action)
-                    if cfg["calendar_enabled"]
-                    else (_at(day, early).timestamp(), _at(day, late).timestamp())
-                )
-                if bounds is None:
-                    continue
-                first, last = bounds
+                first, last = _at(day, early).timestamp(), _at(day, late).timestamp()
                 deferred = manual and cfg["manual_return"] and rt.base_action == action
                 if last < ts and not (offset == 0 and deferred):
                     continue
@@ -141,7 +135,7 @@ def build_presentation(
         _, first, last, action = candidates[0]
         manual_blocks = manual and action in cfg["manual_blocks"]
         earliest = max(first, ts, manual_end or ts) if manual_blocks else max(first, ts)
-        sensors = cfg["lux_enabled"] or cfg["sun_enabled"]
+        sensors = cfg["sun_enabled"]
         conditional = (
             (sensors and first != last and ts < last)
             or bool(cfg["global_conditions"] or cfg.get(f"{action}_conditions"))
