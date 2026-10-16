@@ -6,7 +6,8 @@
   start/end buttons, icons, current phase status and explanatory tooltips for
   shading and ventilation. Disabled features stay visible with a reason.
 - Preserve attributes owned by native HA controls and the user's focused slider
-  value during live updates; keep the insertion marker while dragging a card.
+  value and open event-detail contents during live updates; keep the insertion
+  marker while dragging a card.
 - Recalculate the next movement immediately after phase, mode or protection
   changes without running a two-day prediction for every measured position update.
 - Clear active-motion presentation when device feedback becomes unavailable;

@@ -729,6 +729,9 @@ export class CCAZaluziePanel extends HTMLElement {
       this._preserveDialog &&
       current instanceof HTMLDialogElement &&
       current.open;
+    // Event details and confirmation bodies are populated outside the template.
+    // A background snapshot must not empty or reopen the user's active dialog.
+    if (dialogOpen) return;
     // HA components also own host attributes (tabindex, role, etc.). Only remove
     // attributes previously emitted by this panel, not those added by a component.
     for (const name of this._renderedAttributes.get(current) || [])
@@ -752,8 +755,6 @@ export class CCAZaluziePanel extends HTMLElement {
       if (current instanceof HTMLInputElement && !active)
         current.checked = next.checked;
     }
-    if (current instanceof HTMLDialogElement && dialogOpen && !current.open)
-      current.showModal();
   }
   _overview(c) {
     const d = c.decision || {},

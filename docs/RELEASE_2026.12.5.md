@@ -11,7 +11,8 @@ Porovnanie požiadaviek, príčin a regresných kontrol je v
 - Pod posuvníkom sú štyri zreteľné tlačidlá štartu/konca tienenia a vetrania,
   s ikonami, stavom a vysvetlením jednorazového účinku. Vypnutý režim má dôvod.
 - Priebežné percentá a smer sa aktualizujú bez výmeny stabilných ovládačov.
-  Aktívny HA posuvník, atribúty HA komponentov a značka presúvania sa zachovajú.
+  Aktívny HA posuvník, atribúty HA komponentov, obsah otvoreného detailu a značka
+  presúvania sa zachovajú.
 - Výpočet ďalšieho pohybu reaguje hneď na režim či ochranu; samotné percentá
   počas jazdy nespúšťajú opakovane predikciu na dva dni.
 - Nedostupná žalúzia nemá aktívnu šípku zo starého povelu. Cieľ nie je meranie.

@@ -14,6 +14,10 @@ predchádzajúce funkčné testy neoverili skutočný vzhľad po aktualizácii.
 | Realtime bez preblikávania | Existuje patchovanie DOM, ale testy nezachytili zmiešané assety a časť ovládačov pri opakovaných aktualizáciách. | Séria 100 push zmien, identita prvkov, smer aj merané percentá v detaile a zozname, zachovanie rozpracovanej polohy a dialogu. |
 | Zrozumiteľné názvy | Predikčné `close` je už preložené; preveriť ostatné runtime/phase identifikátory. | Slovenské názvy aj pre jednorazové fázy; žiadne surové kľúče v bežnom prehľade. |
 
+Dodatočná kontrola odhalila aj vyprázdnenie obsahu otvoreného detailu pri
+aktualizácii. Test teraz porovnáva celý obsah detailu pred a po push udalosti;
+panel ponechá aktívny dialóg aj jeho obsah bez prerenderovania.
+
 ## Detská — nesprávna fyzická poloha
 
 Read-only MCP kontrola: ZHA cover aj CCA snapshot hlásili 0 %, zdroj bol

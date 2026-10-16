@@ -54,12 +54,15 @@ test("live snapshots patch the panel without replacing focused controls or dialo
   await page.getByRole("button", { name: "Prehľad", exact: true }).click();
   await page.locator("[data-event]").first().click();
   await expect(page.locator("dialog")).toBeVisible();
+  const details = await page.locator("dialog .dialog-body").innerText();
+  expect(details.trim().length).toBeGreaterThan(0);
   await page.evaluate(() => {
     const controller = structuredClone(window.fixture.controllers[1]);
     controller.position = 41;
     window.publish({ controller });
   });
   await expect(page.locator("dialog")).toBeVisible();
+  await expect(page.locator("dialog .dialog-body")).toHaveText(details);
   await expect(root).toHaveCount(1);
 });
 
