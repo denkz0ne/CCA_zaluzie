@@ -50,8 +50,8 @@ async def test_prediction_api_is_read_only_and_returns_selected_range(
     hass, hass_ws_client, hass_admin_user
 ):
     class Controller:
-        async def async_predict(self, start_date, days):
-            return {"start_date": start_date, "days": days, "events": []}
+        async def async_predict(self, start_date, days, *, from_now=False):
+            return {"start_date": start_date, "days": days, "from_now": from_now, "events": []}
 
     hass.data[DOMAIN]["controllers"]["entry"] = Controller()
     client = await hass_ws_client(hass)
@@ -67,7 +67,33 @@ async def test_prediction_api_is_read_only_and_returns_selected_range(
     response = await client.receive_json()
 
     assert response["success"] is True
-    assert response["result"] == {"start_date": "2026-10-20", "days": 3, "events": []}
+    assert response["result"] == {
+        "start_date": "2026-10-20",
+        "days": 3,
+        "from_now": False,
+        "events": [],
+    }
+
+
+async def test_prediction_api_can_start_from_current_time(hass, hass_ws_client):
+    class Controller:
+        async def async_predict(self, start_date, days, *, from_now=False):
+            return {"start_date": start_date, "days": days, "from_now": from_now, "events": []}
+
+    hass.data[DOMAIN]["controllers"]["entry"] = Controller()
+    client = await hass_ws_client(hass)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "cca_zaluzie/predict",
+            "entry_id": "entry",
+            "days": 2,
+            "from_now": True,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["from_now"] is True
 
 
 async def test_nonadmin_cannot_request_prediction(hass, hass_ws_client, hass_read_only_access_token):

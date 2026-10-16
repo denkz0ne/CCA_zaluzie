@@ -39,6 +39,17 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
   evaluator or enabling automatic return when the user disabled it.
 - See [panel operation](PANEL.md) and the approved UI specification for details.
 
+## 2026.12.1 calculated next movement
+
+- The overview predicts the next movement from the current time and live runtime,
+  using the production decision engine and calculated solar position.
+- It compares current sensor and condition values with values in the movement
+  scenario, including solar azimuth, elevation and configured sun threshold.
+- Future inputs that cannot be known remain explicit assumptions; the scenario
+  does not promise a time when live sensor values may change.
+- The calculation is read-only and preserves manual protection and controller
+  runtime. Measured position history remains available beside the prediction.
+
 ## User goal
 
 Create a Home Assistant custom integration that manages multiple blinds/shutters from one config-flow-driven integration and presents a polished per-cover control dashboard. The behavioral reference is the latest upstream Cover Control Automation (CCA). The visual and functional layout reference is the user's **Svetlo v tme** / **Entity Controller (EC)** integration. This is not an instruction to clone either project's code.

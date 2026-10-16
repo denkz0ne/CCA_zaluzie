@@ -48,14 +48,10 @@ test("shows cover state and the persistent automation list", async ({
   await expect(
     page.getByRole("heading", { name: "Žalúzie", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.locator('[data-cover="two"]'),
-  ).toBeVisible();
+  await expect(page.locator('[data-cover="two"]')).toBeVisible();
   await expect(page.getByText("58 %", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Konfigurácia", exact: true }).click();
-  await expect(
-    page.locator('[data-cover="two"]'),
-  ).toBeVisible();
+  await expect(page.locator('[data-cover="two"]')).toBeVisible();
 });
 
 test("retains separate drafts across covers and sections", async ({ page }) => {
@@ -248,13 +244,79 @@ test("dry-run status is conspicuous and can be turned off per cover", async ({
     .toBe(true);
 });
 
-test("prediction is not requested by the production overview", async ({
+test("overview shows the calculated movement and live and projected sun values", async ({
   page,
 }) => {
-  expect(
-    await page.evaluate(() =>
-      window.calls.some((c) => c.type === "cca_zaluzie/predict"),
-    ),
-  ).toBe(false);
-  await expect(page.getByText("Predikcia", { exact: true })).toHaveCount(0);
+  await page.evaluate(() => {
+    window.fixture.prediction = {
+      events: [
+        {
+          scenario_at: new Date(Date.now() + 3600000).toISOString(),
+          type: "open",
+          target: 100,
+          status: "conditional",
+          solar: { azimuth: 101.2, elevation: -2.8 },
+          conditions: {
+            inputs: {
+              "sun.sun": {
+                state: "below_horizon",
+                attributes: { azimuth: 101.2, elevation: -2.8 },
+              },
+              "binary_sensor.window": { state: "off" },
+            },
+            thresholds: { sun_open: -3 },
+            "light.open.sun": true,
+          },
+          assumptions: [
+            "Jas bude priaznivý scenár.",
+            "Budúca hodnota binary_sensor.window nie je známa.",
+          ],
+        },
+      ],
+    };
+    const controller = window.fixture.controllers[0];
+    controller.config.sun_enabled = true;
+    controller.config.sun_sensor = "sun.sun";
+    controller.config.ventilation_enabled = true;
+    controller.config.window_open = "binary_sensor.window";
+    controller.sensors["sun.sun"] = {
+      state: "below_horizon",
+      attributes: { azimuth: 84.2, elevation: -17.0 },
+    };
+    controller.sensors["binary_sensor.window"] = { state: "on" };
+    controller.decision.conditions = {
+      inputs: {
+        "sun.sun": {
+          state: "below_horizon",
+          attributes: { azimuth: 84.2, elevation: -17.0 },
+        },
+        "binary_sensor.window": { state: "on" },
+      },
+      thresholds: { sun_open: -3 },
+      "light.open.sun": false,
+    };
+    window.publish({ controller });
+  });
+
+  await expect(page.getByText("Vypočítaný ďalší pohyb")).toBeVisible();
+  await expect(
+    page.getByText("Aktuálne: azimut 84,2° · výška −17°"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Pri pohybe: azimut 101,2° · výška −2,8°"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Hranica výšky slnka pre otvorenie: ≥ −3°"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Teraz: nesplnená · pri pohybe: splnená"),
+  ).toBeVisible();
+  await expect(page.getByText("Jas bude priaznivý scenár.")).toBeVisible();
+  await expect(
+    page.getByText("Teraz: on · pri pohybe: neznáma hodnota"),
+  ).toBeVisible();
+  const call = await page.evaluate(() =>
+    window.calls.find((c) => c.type === "cca_zaluzie/predict"),
+  );
+  expect(call.from_now).toBe(true);
 });

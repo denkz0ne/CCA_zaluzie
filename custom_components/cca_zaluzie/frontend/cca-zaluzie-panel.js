@@ -393,6 +393,9 @@ export class CCAZaluziePanel extends HTMLElement {
     this._bulkRevisions = {};
     this._history = new Map();
     this._historyHours = 24;
+    this._predictions = new Map();
+    this._predictionKeys = new Map();
+    this._predictionInFlight = new Map();
     this._view = "overview";
     this._group = "cover";
     this._error = "";
@@ -421,7 +424,10 @@ export class CCAZaluziePanel extends HTMLElement {
     return this._hass;
   }
   connectedCallback() {
-    this._clock = setInterval(() => this._countdown(), 1000);
+    this._clock = setInterval(() => {
+      this._countdown();
+      this._loadPrediction();
+    }, 1000);
     if (this.hass) this._connect();
   }
   disconnectedCallback() {
@@ -456,8 +462,11 @@ export class CCAZaluziePanel extends HTMLElement {
         (event) => {
           const p = event.event || event;
           if (p.order) this._applyOrder(p.order, p.order_revision);
-          if (p.controller) this._update(p.controller);
-          else if (p.removed === true) this._remove(p.entry_id);
+          if (p.controller) {
+            this._update(p.controller);
+            if (p.controller.entry_id === this._selected)
+              this._loadPrediction();
+          } else if (p.removed === true) this._remove(p.entry_id);
           if (this._view === "settings") this._renderList();
           else this._render();
         },
@@ -467,6 +476,7 @@ export class CCAZaluziePanel extends HTMLElement {
         this._unsubscribe = unsub;
       else unsub();
       this._loadHistory();
+      this._loadPrediction();
     } catch (e) {
       this._error = e.message || String(e);
       this._render();
@@ -585,9 +595,202 @@ export class CCAZaluziePanel extends HTMLElement {
       r = c.runtime?.reset,
       resetting = ["closing", "dwell", "stopping"].includes(r?.status),
       disabled = this._busy || resetting || !c.available;
-    const n = c.next_action,
-      ex = c.explanation;
-    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p><p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button("↓ Zatvoriť", `data-action="close" ${disabled ? "disabled" : ""}`, "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}</div><div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, disabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section><section class="card pad"><div class="card-head"><h3>Najbližšia akcia</h3>${n ? `<span class="badge ${n.blocked_by ? "amber" : ""}">${n.blocked_by ? "Odložená" : "Podmienená"}</span>` : ""}</div><div class="next-time">${n?.at ? clock(n.at) : n?.earliest ? `Najskôr ${clock(n.earliest)}` : "Čaká na podmienky"}</div><div class="next-title">${esc(n?.label || "Ďalší pohyb zatiaľ nie je určený")}</div><p class="next-reason">${esc(n?.detail || "Ďalšia akcia sa určí podľa aktuálnych pravidiel a vstupov.")}</p>${n?.target != null ? `<p>Cieľ <strong>${esc(n.target)} %</strong></p>` : ""}${n?.scheduled_at && n.scheduled_at !== n.at ? `<p>Pôvodný plán: ${clock(n.scheduled_at)}</p>` : ""}${n?.latest ? `<p>Najneskôr podľa plánu: ${clock(n.latest)}</p>` : ""}${n?.blocked_by ? `<div class="inline-note amber">${esc(inhibits[n.blocked_by] || n.blocked_by)}${n.blocked_until ? ` do ${clock(n.blocked_until)}` : ""}. Pred pohybom sa znova overia podmienky.</div>` : ""}</section></div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button("Tieniť", `data-action="shade" ${disabled ? "disabled" : ""}`) : ""}${c.config.ventilation_enabled ? button("Vetrať", `data-action="ventilate" ${disabled ? "disabled" : ""}`) : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
+    const ex = c.explanation;
+    return `${c.simulation?.enabled ? '<div class="inline-note amber simulation-banner"><strong>SIMULÁCIA — motor je zablokovaný</strong><span>Simulované povely aj akcie sa iba zaznamenávajú.</span></div>' : ""}<div class="overview-grid"><section class="card pad"><div class="card-head"><h3>Poloha a ovládanie</h3><span class="badge">${esc(this._state(c))}</span></div><div class="position-layout">${this._blind(c, true)}<div><div class="position-number">${c.position == null ? "Neznáma" : `${esc(c.position)}<span> %</span>`}</div><p class="position-caption">${c.position == null ? "Zariadenie nepotvrdilo polohu" : "Potvrdená poloha zariadenia"}</p><p class="position-target">Aktuálny cieľ: <b>${d.target == null ? "Neurčený" : `${esc(d.target)} %`}</b></p>${c.runtime?.estimated_position != null && c.position == null ? `<small>Odhad: ${esc(c.runtime.estimated_position)} %</small>` : ""}${c.simulation?.shadow?.position != null ? `<small>Simulovaná poloha: ${esc(c.simulation.shadow.position)} %</small>` : ""}</div></div><div class="motor-controls">${button("↑ Otvoriť", `data-action="open" ${disabled ? "disabled" : ""}`, "Manuálne otvoriť cez bezpečnostné pravidlá.", "motor")}${button("■ Stop", `data-action="stop" ${!c.available ? "disabled" : ""}`, "Okamžite zastaviť pohyb.", "motor stop")}${button("↓ Zatvoriť", `data-action="close" ${disabled ? "disabled" : ""}`, "Manuálne zatvoriť cez bezpečnostné pravidlá.", "motor")}</div><div class="range-line"><label for="manual-position">Poloha</label>${this._positionControls(c, disabled)}</div><div class="range-ends"><span>0 % · zatvorené</span><span>100 % · otvorené</span></div></section>${this._predictionBlock(c)}</div><section class="card reason-card"><div><h3>${esc(ex?.title || "Prečo je žalúzia v tejto polohe?")}</h3><p>${esc(ex?.summary || d.reason || "Zatiaľ bez vysvetlenia.")}</p>${button("Zobraziť podmienky a vstupy", "data-explanation", "Zobraziť skutočné vstupy posledného rozhodnutia.", "link")}</div></section>${this._historyBlock(c)}${r ? `<section class="card pad reset"><strong>${esc({ closing: "Spúšťanie na doraz", dwell: "Výdrž na doraze · potom STOP", stopping: "Odosielanie STOP", failed: "Reset zlyhal", interrupted: "Reset bol prerušený", cancelled: "Reset bol zrušený", completed: "Reset bol dokončený", simulated_completed: "Reset dokončený iba v simulácii" }[r.status] || r.status)}</strong>${resetting ? `<span class="reset-clock" data-due="${r.due || 0}"></span>${button("Zrušiť reset", 'data-action="cancel_reset"', "Prerušiť reset a zastaviť motor.")}` : ""}<p>${esc(r.error || "Úplné zatvorenie, 60 sekúnd na doraze a následne STOP.")}</p></section>` : ""}<div class="more-actions">${c.config.shading_enabled ? button("Tieniť", `data-action="shade" ${disabled ? "disabled" : ""}`) : ""}${c.config.ventilation_enabled ? button("Vetrať", `data-action="ventilate" ${disabled ? "disabled" : ""}`) : ""}${button("Reset polohy", `data-reset ${disabled ? "disabled" : ""}`, "Zatvoriť, po potvrdení dorazu podržať 60 sekúnd a poslať STOP. Vyžaduje potvrdenie.")}${button("Ukončiť ochranu manuálneho ovládania", `data-action="clear_override" ${resetting ? "disabled" : ""}`, "Ukončiť ochranu; pohyb závisí od pravidiel.")}${button("Prepočítať cieľ", `data-action="reconcile" ${disabled ? "disabled" : ""}`, "Znova overiť pravidlá a aktuálny cieľ.")}</div>`;
+  }
+  async _loadPrediction() {
+    const c = this._controllers.get(this._selected);
+    if (!c || !this.hass || this._view !== "overview") return;
+    const key = [
+      Math.floor(Date.now() / 60000),
+      c.config_revision || "",
+      JSON.stringify(c.decision?.conditions?.inputs || {}),
+      c.runtime?.manual_since || "",
+      JSON.stringify(c.runtime?.hold_signature || null),
+    ].join(":");
+    if (this._predictionKeys.get(c.entry_id) === key) return;
+    if (this._predictionInFlight.get(c.entry_id) === key) return;
+    this._predictionKeys.set(c.entry_id, key);
+    this._predictionInFlight.set(c.entry_id, key);
+    try {
+      const result = await this.hass.callWS({
+        type: "cca_zaluzie/predict",
+        entry_id: c.entry_id,
+        days: 2,
+        from_now: true,
+      });
+      if (this._predictionKeys.get(c.entry_id) === key)
+        this._predictions.set(c.entry_id, result);
+    } catch (error) {
+      if (this._predictionKeys.get(c.entry_id) === key)
+        this._predictions.set(c.entry_id, {
+          error: error.message || String(error),
+        });
+    } finally {
+      if (this._predictionInFlight.get(c.entry_id) === key)
+        this._predictionInFlight.delete(c.entry_id);
+      if (this._selected === c.entry_id && this._view === "overview")
+        this._render();
+    }
+  }
+
+  _predictionBlock(c) {
+    const prediction = this._predictions.get(c.entry_id);
+    const now = c.server_time || Date.now() / 1000;
+    const event = prediction?.events?.find(
+      (item) =>
+        stamp(item.scenario_at) >= now * 1000 && item.status !== "blocked",
+    );
+    const config = c.config || {};
+    const currentInputs =
+      c.decision?.conditions?.inputs || prediction?.current?.inputs || {};
+    const futureInputs = event?.conditions?.inputs || {};
+    const fmt = (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "?";
+      return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: 1 })
+        .format(number)
+        .replace(/^-/, "−");
+    };
+    const solarEnabled = config.sun_enabled || config.shading_enabled;
+    const sunNow = currentInputs[config.sun_sensor || "sun.sun"];
+    const currentAzimuth = sunNow?.attributes?.azimuth;
+    const currentElevation = sunNow?.attributes?.elevation;
+    const projectedSolar = event?.solar;
+    const thresholdKey =
+      event?.type === "open"
+        ? "sun_open"
+        : event?.type === "close"
+          ? "sun_close"
+          : null;
+    const solarThreshold = thresholdKey
+      ? (event?.conditions?.thresholds?.[thresholdKey] ?? config[thresholdKey])
+      : null;
+    const solarRule = thresholdKey
+      ? config.sun_threshold_mode === "fixed"
+        ? `Hranica výšky slnka ${event.type === "open" ? "pre otvorenie" : "pre zatvorenie"}: ${event.type === "open" ? "≥" : "≤"} ${fmt(solarThreshold)}°`
+        : `Hranicu výšky slnka určuje ${config[`sun_${event.type}_sensor`] || "nastavený senzor"}`
+      : event?.type === "shade_start" && config.shading_enabled
+        ? `Tienenie sa riadi azimutom ${fmt(config.shade_azimuth_start)}–${fmt(config.shade_azimuth_end)}°`
+        : "";
+    const solarRows = solarEnabled
+      ? `<div class="prediction-condition"><strong>Slnko teraz</strong><span>Aktuálne: azimut ${currentAzimuth == null ? "?" : fmt(currentAzimuth)}° · výška ${currentElevation == null ? "?" : fmt(currentElevation)}°</span></div>${projectedSolar ? `<div class="prediction-condition"><strong>Slnko pri pohybe</strong><span>Pri pohybe: azimut ${fmt(projectedSolar.azimuth)}° · výška ${fmt(projectedSolar.elevation)}°</span></div>` : ""}${solarRule ? `<div class="prediction-condition"><strong>Podmienka slnka</strong><span>${esc(solarRule)}</span></div>` : ""}`
+      : "";
+    const inputEntities = [
+      config.lux_enabled && config.lux_sensor,
+      config.shading_enabled && (config.shade_lux_sensor || config.lux_sensor),
+      config.shading_enabled && config.temperature_sensor1,
+      config.shading_enabled && config.temperature_sensor2,
+      config.ventilation_enabled && config.window_open,
+      config.ventilation_enabled && config.window_tilted,
+      config.resident_sensor,
+      config.instance_entity,
+      config.shade_custom_sensor,
+      ...Object.keys(currentInputs).filter(
+        (entity) => entity !== config.cover_entity && c.sensors?.[entity],
+      ),
+    ].filter((entity, index, all) => entity && all.indexOf(entity) === index);
+    const readingText = (reading) => {
+      if (!reading) return "Nedostupná";
+      const parts = [
+        reading.state && reading.state !== "unknown" ? reading.state : "",
+      ];
+      if (reading.value != null) parts.push(fmt(reading.value));
+      for (const key of ["azimuth", "elevation", "temperature"]) {
+        if (reading.attributes?.[key] != null)
+          parts.push(
+            `${key === "azimuth" ? "az." : key === "elevation" ? "výška" : "teplota"} ${fmt(reading.attributes[key])}${key === "temperature" ? " °C" : "°"}`,
+          );
+      }
+      return parts.filter(Boolean).join(" · ") || "Bez hodnoty";
+    };
+    const sensorRows = inputEntities
+      .map((entity) => {
+        const actual = currentInputs[entity] || c.sensors?.[entity];
+        const future = futureInputs[entity];
+        const futureIsUnknown = Boolean(
+          event?.assumptions?.includes(
+            `Budúca hodnota ${entity} nie je známa.`,
+          ),
+        );
+        const name = c.sensors?.[entity]?.attributes?.friendly_name || entity;
+        const futureText = futureIsUnknown
+          ? " · pri pohybe: neznáma hodnota"
+          : future
+            ? ` · pri pohybe: ${esc(readingText(future))}`
+            : "";
+        return `<div class="prediction-condition"><strong>${esc(name)}</strong><span>Teraz: ${esc(readingText(actual))}${futureText}</span></div>`;
+      })
+      .join("");
+    const currentConditions = c.decision?.conditions || {};
+    const projectedConditions = event?.conditions || {};
+    const conditionKeys = new Set([
+      ...Object.keys(currentConditions),
+      ...Object.keys(projectedConditions),
+    ]);
+    const conditionLabel = (key) =>
+      ({
+        "light.open.sun": "Otvorenie · výška slnka",
+        "light.close.sun": "Zatvorenie · výška slnka",
+        "light.open.lux": "Otvorenie · jas",
+        "light.close.lux": "Zatvorenie · jas",
+        "condition.global": "Spoločné podmienky",
+        "condition.open": "Podmienky otvorenia",
+        "condition.close": "Podmienky zatvorenia",
+        "schedule.open.day_known": "Ranný plán · pracovný deň",
+        "schedule.close.day_known": "Večerný plán · pracovný deň",
+      })[key] || key.replaceAll(".", " · ");
+    const conditionState = (value) =>
+      value === true ? "splnená" : value === false ? "nesplnená" : "neznáma";
+    const conditionRows = [...conditionKeys]
+      .filter(
+        (key) =>
+          (key.startsWith("condition.") ||
+            key.startsWith("light.") ||
+            key.startsWith("schedule.")) &&
+          (typeof currentConditions[key] === "boolean" ||
+            typeof projectedConditions[key] === "boolean"),
+      )
+      .map(
+        (key) =>
+          `<div class="prediction-condition"><strong>${esc(conditionLabel(key))}</strong><span>Teraz: ${conditionState(currentConditions[key])}${event ? ` · pri pohybe: ${conditionState(projectedConditions[key])}` : ""}</span></div>`,
+      )
+      .join("");
+    const status = event
+      ? {
+          computed: "Vypočítané",
+          estimated: "Odhad",
+          conditional: "Podmienený scenár",
+        }[event.status] || "Podmienený scenár"
+      : prediction?.error
+        ? "Výpočet nie je dostupný"
+        : "Čas pohybu zatiaľ nemožno vypočítať";
+    const detail = event
+      ? `${esc(event.reason || "Pohyb podľa nastavených pravidiel.")} · cieľ ${esc(event.target)} %`
+      : esc(
+          c.decision?.inhibit
+            ? inhibits[c.decision.inhibit] || c.decision.inhibit
+            : "Nie je známy vykonateľný pohyb v nasledujúcich dvoch dňoch.",
+        );
+    const assumptions = event?.assumptions?.length
+      ? `<p class="next-reason">Neznáme budúce vstupy: ${esc(event.assumptions.join(" "))}</p>`
+      : "";
+    const eventTime = event
+      ? (() => {
+          const value = new Date(event.scenario_at);
+          const today = new Date(now * 1000);
+          return value.toDateString() === today.toDateString()
+            ? `Dnes · ${clock(event.scenario_at)}`
+            : value.toLocaleString("sk-SK", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+        })()
+      : "—";
+    return `<section class="card pad"><div class="card-head"><h3>Vypočítaný ďalší pohyb</h3><span class="badge ${event?.status !== "computed" ? "amber" : ""}">${esc(status)}</span></div><div class="next-time">${esc(eventTime)}</div><div class="next-title">${esc(event?.type ? eventNames[event.type] || event.type : "Bez vypočítaného pohybu")}</div><p class="next-reason">${detail}</p>${solarRows || sensorRows || conditionRows ? `<div class="prediction-conditions">${solarRows}${sensorRows}${conditionRows}</div>` : ""}${assumptions}<p class="prediction-footnote">Čas vychádza z aktuálnych nastavení a výpočtu; pri neznámych budúcich vstupoch je podmienený.</p></section>`;
   }
   _positionControls(c, disabled) {
     const attrs = `data-position min="0" max="100" value="${c.position ?? 50}" ${disabled ? "disabled" : ""}`;

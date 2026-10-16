@@ -85,6 +85,8 @@
               start: new Date(Date.now() - msg.hours * 3600000).toISOString(),
               end: new Date().toISOString(),
             };
+          if (msg.type === "cca_zaluzie/predict")
+            return structuredClone(window.fixture.prediction || { events: [] });
           if (msg.type === "cca_zaluzie/reorder") {
             window.fixture.order = msg.entry_ids;
             return {

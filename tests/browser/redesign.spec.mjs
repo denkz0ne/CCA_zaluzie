@@ -68,7 +68,7 @@ test("ctrl selection keeps focus and bulk patches only explicitly edited allowli
     )
     .toEqual({ morning_late: "09:15" });
 });
-test("history reads actual endpoint, preserves gaps and prediction is absent", async ({
+test("history reads actual endpoint, preserves gaps and overview requests a live prediction", async ({
   page,
 }) => {
   await page.getByLabel("Obdobie histórie").selectOption("168");
@@ -82,11 +82,15 @@ test("history reads actual endpoint, preserves gaps and prediction is absent", a
     )
     .toBe(true);
   await expect(page.locator(".history-gap")).toBeVisible();
-  expect(
-    await page.evaluate(() =>
-      window.calls.some((c) => c.type === "cca_zaluzie/predict"),
-    ),
-  ).toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (c) => c.type === "cca_zaluzie/predict" && c.from_now === true,
+        ),
+      ),
+    )
+    .toBe(true);
 });
 test("movement triangle uses observed direction and saved toast expires", async ({
   page,
@@ -223,21 +227,13 @@ test("dragging shows drop target and persists actual new order", async ({
     )
     .toEqual(["two", "one", "three"]);
 });
-test("unknown observed direction is not inferred from target and next action ignores internal timer", async ({
+test("unknown observed direction is not inferred from target", async ({
   page,
 }) => {
   await page.evaluate(() => {
     const c = window.fixture.controllers[0];
     c.last_movement = null;
     c.decision.target = 0;
-    c.decision.next_at = 1792080000;
-    c.next_action = {
-      label: "Večerné zatvorenie",
-      target: 0,
-      at: "2026-10-15T19:00:00+02:00",
-      scheduled_at: "2026-10-15T18:30:00+02:00",
-      detail: "Čaká na koniec ochrany manuálneho ovládania.",
-    };
     window.publish({ controller: c });
   });
   await expect(
@@ -245,8 +241,6 @@ test("unknown observed direction is not inferred from target and next action ign
       '[data-row="one"] [data-direction], .position-layout [data-direction]',
     ),
   ).toHaveCount(0);
-  await expect(page.locator(".next-time")).toContainText("19:00");
-  await expect(page.locator(".next-title")).toHaveText("Večerné zatvorenie");
 });
 test("actual production layout screenshots and mobile overflow", async ({
   page,
