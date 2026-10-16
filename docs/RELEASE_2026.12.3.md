@@ -39,5 +39,6 @@ Lokálne overenie pred odovzdaním do GitHub CI:
 - Release balík `cca_zaluzie.zip` sa zostavil a overila sa zhoda manifestu,
   panelu a tagovej verzie `2026.12.3`.
 
-GitHub Actions, publikovaný tag/archív a uzavretie issue sa doplnia po
-dokončení CI a zverejnení vydania.
+Pull request #15 CI prešiel na commite `32277bc`: HA **2026.9.4**, **2026.10.0**
+a **2026.10.1**, browser suite, Ruff, hassfest a HACS validation. Finálny
+dokumentačný commit tieto workflow znovu spúšťa. Tag a archív sa overia po merge.
