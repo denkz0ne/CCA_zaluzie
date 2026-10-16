@@ -10,6 +10,8 @@ bezpečnostná brána motorov, simulácia a reset s výdržou 60 sekúnd.
   Testy vyžadujúce skutočný HA runtime bežia na Linuxe v GitHub Actions.
 - `py -3.12 -m ruff check custom_components tests` — bez chyby.
 - `npm test` — 35 browser testov; produkčný modul so samostatnými fixtures.
+  Prehliadač má explicitne nastavené pásmo Europe/Bratislava a locale sk-SK,
+  aby časové očakávania nezáviseli od pásma počítača alebo CI runnera.
 - Vizuálna kontrola produkčného prehľadu a mobilnej konfigurácie, bez pretečenia
   šírky pri 390 px; browser suite vytvára aj náhľady tmavej témy.
 - `py -3.12 scripts/package_release.py 2026.12.0` — vytvorený HACS archív;
