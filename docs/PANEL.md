@@ -19,6 +19,18 @@ História používa namerané polohy a podľa dostupnosti aj Recorder. Neznáma
 poloha je medzera v grafe. Simulácia ani časový odhad nevytvárajú namerané
 polohy. Trojuholník pri ikone ukazuje posledný potvrdený smer pohybu.
 
+Keď je zapnutá ochrana kontaktu, otvorenie kontaktu po najviac dvojsekundovom
+potvrdení presunie žalúziu do ochrannej polohy. Po potvrdenom zatvorení kontaktu
+sa spustí 30-minútová ochrana pred automatickým zatvorením. Prehľad ukazuje
+zostávajúci čas a plánované zatvorenie po jej skončení. Opätovné otvorenie
+kontaktom túto ochranu zruší a spustí nový cyklus po ďalšom zatvorení.
+
+Po návrate môže používateľ raz stlačiť **Zatvoriť** a ochranu ukončiť, ale iba
+keď je kontakt aktuálne a stabilne zatvorený. Počas ochrany je posuvník polohy
+zablokovaný; neznámy kontakt, Force-zatvorenie ani iný povel ju neobídu. Bez
+zapnutej ochrany otvorený kontakt môže vyvolať bežné vetranie a 30-minútový
+interval sa nepoužije.
+
 ## Poradie automatizácií
 
 Na hornej hrane každej karty je zvýraznený pásik s bodkovaným úchytom.

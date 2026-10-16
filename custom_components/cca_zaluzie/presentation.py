@@ -30,6 +30,7 @@ BLOCKS = {
     "instance_disabled": "Riadenie nie je povolené nadradenou podmienkou.",
     "contact_unknown": "Stav okenného kontaktu nie je známy.",
     "contact_pending": "Čaká sa na potvrdenie okenného kontaktu.",
+    "contact_lockout": "Zatvorenie čaká na skončenie 30-minútovej ochrany po zatvorení kontaktu.",
     "window_tilted": "Pohyb blokuje otvorené okno.",
     "unavailable": "Žalúzia nie je dostupná.",
     "position_unknown": "Potvrdená poloha žalúzie nie je známa.",
@@ -201,10 +202,26 @@ def build_presentation(
             detail="Pokračovanie závisí od aktuálneho stavu ovládania a bezpečnostných podmienok.",
         )
     block = decision.inhibit
+    if block == "contact_lockout" and rt.contact_lockout_until is not None:
+        next_action = _action(
+            "close",
+            label="Zatvorenie po ochrane kontaktu",
+            target=cfg["close_position"],
+            at=_iso(rt.contact_lockout_until, now),
+            earliest=_iso(rt.contact_lockout_until, now),
+            status="deferred",
+            blocked_by="contact_lockout",
+            blocked_until=_iso(rt.contact_lockout_until, now),
+            detail=(
+                "Zatvorenie je odložené do skončenia ochrany po návrate. "
+                "Potom sa znovu overia aktuálne podmienky."
+            ),
+        )
     if block and block not in (
         "manual",
         "schedule_window",
         "unowned_target",
+        "contact_lockout",
         "startup_hold",
         "explicit_hold",
         "manual_reset_hold",

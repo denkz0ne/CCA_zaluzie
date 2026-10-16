@@ -164,6 +164,37 @@ def test_configured_future_contact_cannot_guarantee_exact_motor_time():
     assert action["status"] == "waiting_conditions"
 
 
+def test_post_close_contact_lockout_is_the_next_planned_action():
+    cfg = validate_config(
+        {
+            "cover_entity": "cover.test",
+            "name": "Test",
+            "time_enabled": True,
+            "morning_enabled": False,
+            "evening_early": "18:00",
+            "evening_late": "18:00",
+            "ventilation_enabled": True,
+            "contact_lockout_enabled": True,
+            "window_open": "binary_sensor.passage",
+        }
+    )
+    until = NOW.timestamp() + 20 * 60
+    rt = Runtime(last_window="closed", contact_lockout_until=until)
+    snap = Snapshot(
+        entities={
+            "cover.test": Reading("open", {"current_position": 100}),
+            "binary_sensor.passage": Reading("off"),
+        }
+    )
+    decision = evaluate(cfg, rt, snap, NOW)
+    result = build_presentation(cfg, rt, snap, decision, NOW)
+    action = result["next_action"]
+    assert decision.inhibit == "contact_lockout"
+    assert action["action"] == "close"
+    assert action["at"] == datetime.fromtimestamp(until, NOW.tzinfo).isoformat()
+    assert action["blocked_by"] == "contact_lockout"
+
+
 def test_future_workday_is_not_inferred_from_todays_live_sensor():
     cfg, rt, snap, decision = scenario(manual_return=True, workday_sensor="binary_sensor.workday")
     rt.manual_since = None

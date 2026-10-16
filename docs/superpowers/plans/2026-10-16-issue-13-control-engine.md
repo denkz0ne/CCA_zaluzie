@@ -2,7 +2,9 @@
 
 **Goal:** Implement the user-approved state/priority simplification in issue #13 with backwards-compatible migration, integration and browser coverage, and release it through GitHub CI.
 
-**Base:** `2026.12.1` (`f682750`). **Branch:** `feat/issue-13-control-engine`.
+**Status:** Completing issue #13 for `2026.12.3`; release and issue closure are pending CI and review.
+
+**Base:** `2026.12.2` (`0d5a8c1`). **Branch:** `feat/issue-13-completion`.
 
 **Source decisions:** `docs/superpowers/specs/2026-10-16-issue-13-decisions.md` and issue #13. User-selected answers are recorded there; unanswered behavior is preserved conservatively.
 

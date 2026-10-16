@@ -568,6 +568,12 @@ svg.icon {
   width: 18px;
   height: 18px;
 }
+.contact-lockout {
+  margin-top: 16px;
+}
+.contact-lockout span {
+  display: block;
+}
 .next-time {
   font-size: 36px;
   letter-spacing: -1px;

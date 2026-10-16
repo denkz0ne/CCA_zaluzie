@@ -83,6 +83,9 @@ class Runtime:
     expired: list[str] = field(default_factory=list)
     manual_since: float | None = None
     manual_position: float | None = None
+    contact_lockout_until: float | None = None
+    contact_closed_verified_at: float | None = None
+    contact_lockout_release_used: bool = False
     correction_mode: str | None = None
     correction_base_target: float | None = None
     correction_target: float | None = None

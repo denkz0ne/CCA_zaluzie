@@ -88,7 +88,70 @@ test("overview exposes one-shot phase controls and sends the matching action", a
   await expect(
     page.getByRole("button", { name: "Ukončiť tienenie dnes" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Začať vetranie" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Začať vetranie" }),
+  ).toBeVisible();
+});
+
+test("overview explains the post-close protection and labels its one-time release", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = window.fixture.controllers[0];
+    const now = Date.now() / 1000;
+    controller.config.window_open = "binary_sensor.passage";
+    controller.config.contact_lockout_enabled = true;
+    controller.runtime.contact_lockout_until = now + 1200;
+    controller.runtime.contact_closed_verified_at = now - 5;
+    controller.sensors["binary_sensor.passage"] = {
+      state: "off",
+      attributes: {},
+    };
+    controller.server_time = now;
+    window.publish({ controller });
+  });
+
+  await expect(page.getByText("Ochrana po zatvorení kontaktu")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "↓ Zatvoriť · jednorazovo" }),
+  ).toBeEnabled();
+  await expect(page.locator("#manual-position")).toBeDisabled();
+  await page.getByRole("button", { name: "↓ Zatvoriť · jednorazovo" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.calls.some(
+          (call) =>
+            call.type === "cca_zaluzie/control" && call.action === "close",
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
+test("one-time close stays disabled when the contact changed after verification", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const controller = window.fixture.controllers[0];
+    const now = Date.now() / 1000;
+    controller.config.window_open = "binary_sensor.passage";
+    controller.config.contact_lockout_enabled = true;
+    controller.runtime.contact_lockout_until = now + 1200;
+    controller.runtime.contact_closed_verified_at = now - 10;
+    controller.sensors["binary_sensor.passage"] = {
+      state: "off",
+      changed_at: now - 2,
+      attributes: {},
+    };
+    controller.server_time = now;
+    window.publish({ controller });
+  });
+
+  await expect(
+    page.getByRole("button", { name: "↓ Zatvoriť", exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator("#manual-position")).toBeDisabled();
 });
 
 test("retains separate drafts across covers and sections", async ({ page }) => {

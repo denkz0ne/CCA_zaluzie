@@ -1,6 +1,6 @@
 # Integration implementation brief
 
-Status: implemented as a Home Assistant custom integration. This document preserves
+Status: implemented and released as version 2026.12.3 for Home Assistant 2026.9+. This document preserves
 the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
 ## 2026.11.0 runtime additions
@@ -50,7 +50,7 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
 - The calculation is read-only and preserves manual protection and controller
   runtime. Measured position history remains available beside the prediction.
 
-## 2026.12.2 approved issue #13 behavior
+## 2026.12.2–2026.12.3 approved issue #13 behavior
 
 - Active shading and ventilation do not overlap; an active phase finishes before
   the other can take over. The overview provides one-shot start/end actions.
@@ -60,6 +60,16 @@ the original requirements; current delivery mapping is in [FEATURE_MATRIX.md](FE
   ±20 percentage points and the fixed edit window is 120 seconds from the first edit.
 - An enabled open-contact lockout blocks Force-close when the contact is open or
   unknown. Other Force priority and existing Force entities remain supported.
+- Opening a passage contact uses at most two seconds of confirmation regardless
+  of older configurable delays; closing keeps the configured stable confirmation.
+  With lockout enabled, verified closure starts a persisted 30-minute hold against
+  downward movement. Reopening clears and rearms it.
+- The hold expires automatically and appears as the planned next close. The
+  overview's explicit Close action can end it once, only with a currently stable
+  closed contact. Other downward controls, Force-close, unknown and unavailable
+  contact cannot bypass it. Lockout-off contacts do not start this hold.
+- An ordinary open contact cannot replace an already active shading phase.
+  Shading and ventilation remain serialized; the safety lockout can still override.
 - Weather changes are stabilized internally according to each cover's selected
   states. Morning/evening brightness and calendar inputs no longer affect the
   schedule; legacy entry values are migrated, and a legacy brightness sensor can
