@@ -126,9 +126,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .config import ConfigError, validate_config
 
-    if entry.version != 1 or entry.minor_version > 2:
+    if entry.version != 1 or entry.minor_version > 3:
         return False
-    if entry.minor_version < 2:
+    if entry.minor_version < 3:
         try:
             normalized = validate_config({**entry.data, **entry.options})
         except ConfigError:
@@ -139,6 +139,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data=normalized,
             options={},
             version=1,
-            minor_version=2,
+            minor_version=3,
         )
     return True

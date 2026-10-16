@@ -41,6 +41,14 @@ class Field:
 
 FIELDS: dict[str, Field] = {}
 LEGACY_CONFIG_FIELDS = {
+    # Read only as migration input; never expose or subscribe to these fields.
+    "tilted_blocks",
+    "tilted_lockout",
+    "vent_after_shade",
+    "vent_keep_full_tilt",
+    "vent_lower_from_above",
+    "window_tilted",
+
     "calendar_enabled",
     "calendar_entity",
     "calendar_open_title",
@@ -289,16 +297,8 @@ _f(
 )
 _f("window_open", "Kontakt otvoreného okna", "", "entity", "windows", depends="ventilation_enabled")
 _f(
-    "window_tilted",
-    "Kontakt vyklopeného okna",
-    "",
-    "entity",
-    "windows",
-    depends="ventilation_enabled",
-)
-_f(
     "contact_lockout_enabled",
-    "Ochrana proti zatvoreniu pri otvorenom kontakte",
+    "Ochrana priechodu",
     True,
     "bool",
     "windows",
@@ -319,14 +319,6 @@ _f(
     group="windows",
     unit="s",
     depends="ventilation_enabled",
-)
-_f(
-    "tilted_lockout",
-    "Blokácia pri vyklopení",
-    "floor",
-    "select",
-    "windows",
-    options=("floor", "close_only", "all", "none"),
 )
 _f("shading_over_ventilation", "Uprednostniť tienenie pred vetraním", False, "bool", "windows")
 
@@ -448,19 +440,8 @@ for key, label, group in [
     ("prevent_open_vent_end", "Po vetraní neotvárať", "windows"),
     ("vent_start_no_delay", "Vetranie bez oneskorenia jazdy", "windows"),
     ("vent_return_delay", "Po zatvorení okna použiť oneskorenie jazdy", "windows"),
-    ("vent_lower_from_above", "Pri vyklopení znížiť vyššiu polohu na vetranie", "windows"),
-    ("vent_after_shade", "Po tienení použiť vetraciu polohu", "windows"),
-    ("vent_keep_full_tilt", "Pri prechode otvorené → vyklopené zachovať otvorenie", "windows"),
 ]:
     _f(key, label, False, "bool", group)
-_f(
-    "tilted_blocks",
-    "Vyklopené okno blokuje",
-    [],
-    "multi",
-    "windows",
-    options=("close", "shade_start", "shade_end"),
-)
 FIELDS["forecast_type"] = Field(
     "forecast_type",
     "Zdroj predpovede",
@@ -539,10 +520,8 @@ _HELP = {
     "shade_hold_hot": "Pri pretrvávajúcej vysokej teplote zachová tienenie aj po skončení ostatných podmienok.",
     "shade_end_immediate": "Po opustení nastaveného rozsahu slnka ukončí tienenie bez bežného potvrdzovacieho čakania.",
     "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
-    "contact_lockout_enabled": "Zapne pravidlo „Ochrana proti zatvoreniu pri otvorenom kontakte“ pre túto žalúziu. Po vypnutí sa toto pravidlo neuplatní.",
+    "contact_lockout_enabled": "Pri otvorenom okne alebo dverách drží žalúziu v bezpečnej polohe. Po potvrdenom zatvorení chráni priechod ešte 30 minút. Vypnutím tejto ochrany kontakt slúži iba na vetranie.",
     "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
-    "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",
-    "tilted_blocks": "Automatické akcie, ktoré sa nesmú vykonať pri vyklopenom okne podľa zvolenej ochrany.",
     "shading_over_ventilation": "Pri súčasne aktívnom tienení a vetraní uprednostní polohu tienenia, pri zachovaní ochrany kontaktov.",
     "open_once": "Po splnení ranného otvorenia ho v ten istý deň znovu automaticky neopakuje.",
     "close_once": "Po splnení večerného zatvorenia ho v ten istý deň znovu automaticky neopakuje.",
@@ -554,9 +533,6 @@ _HELP = {
     "prevent_open_vent_end": "Po skončení vetrania zabráni návratu smerom k otvorenej polohe.",
     "vent_start_no_delay": "Pri začiatku vetrania vynechá bežné pevné a náhodné oneskorenie pred pohybom.",
     "vent_return_delay": "Pri návrate po zatvorení okna použije bežné oneskorenie pred pohybom.",
-    "vent_lower_from_above": "Pri vyklopení dovolí znížiť vyššiu aktuálnu polohu na nastavenú polohu vetrania.",
-    "vent_after_shade": "Ak je okno vyklopené aj po skončení tienenia, použije polohu vetrania.",
-    "vent_keep_full_tilt": "Pri zmene kontaktu z otvoreného na vyklopené okno ponechá plné otvorenie žalúzie.",
     "manual_enabled": "Po zistení manuálneho ovládania odloží vybrané automatické akcie, aby neprepísali tvoju polohu.",
     "manual_blocks": "Vyber, ktoré automatické akcie majú počas ochrany manuálneho ovládania čakať.",
     "manual_timeout": "Ako dlho chrániť polohu po manuálnom ovládaní. Hodnota 0 vypne ukončenie podľa trvania.",

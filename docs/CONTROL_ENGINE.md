@@ -1,6 +1,6 @@
-# Riadenie žalúzií — verzia 2026.12.5
+# Riadenie žalúzií — verzia 2026.12.6
 
-Tento dokument opisuje správanie verzie **2026.12.5**. Každá žalúzia má vlastný
+Tento dokument opisuje správanie verzie **2026.12.6**. Každá žalúzia má vlastný
 stav a rozhodnutie. Automatizácia, prehľad najbližšieho pohybu aj simulácia
 vychádzajú z rovnakého rozhodovacieho jadra. Predikcia nemení stav ani neposiela
 povely; simulácia používa oddelený uložený stav a nevolá služby motora.
@@ -77,7 +77,7 @@ neaktualizuje ani nereštartuje používateľov Home Assistant.
 
 
 
-## Panel a živý stav pohybu — 2026.12.5
+## Panel a živý stav pohybu — 2026.12.6
 
 Panel používa stabilné uzly DOM a pri WebSocket aktualizáciách mení iba rozdiely.
 Výber, otvorené okno detailu, fokus, rozpracované nastavenia a pozícia v zozname
@@ -91,10 +91,26 @@ preusporiadaním a výberom viacerých kariet podržaním na dotykovom zariaden�
 Tienenie a vetranie možno spustiť alebo ukončiť vedľa hlavných tlačidiel
 ovládania; volanie služby naďalej prechádza existujúcou bezpečnostnou bránou.
 
-V 2026.12.5 sú štart a koniec samostatné tlačidlá v sekcii pod posuvníkom.
+V 2026.12.6 sú štart a koniec samostatné tlačidlá v sekcii pod posuvníkom.
 Začiatok na pokyn nahradí plánovaný začiatok aktuálnej fázy; režim potom skončí
 podľa svojich pravidiel. Ukončenie tienenia zabráni jeho dnešnému opakovaniu.
 Ukončenie vetrania potlačí aktuálny kontaktný cyklus; nový cyklus môže začať
 ďalšie vetranie. Platnosť hraníc sa nemení na trvalý Force stav.
 Pri strate dostupnosti snapshot výslovne označí pohyb ako nedostupný,
 nezachová aktívny smer zo starého povelu a nevymýšľa nameranú polohu.
+
+## Okná a ochrana priechodu — 2026.12.6
+
+V konfigurácii vyber **Okná a vetranie → Ochrana priechodu**. Veľký prepínač
+chráni priechod pri otvorenom okne alebo dverách a ešte 30 minút po potvrdenom
+zatvorení. Vyžaduje zapnuté spracovanie kontaktov a bežný kontakt otvorenia.
+Vypnutím ochrany sa kontakt používa na vetranie; nejde o vypnutie celého riadenia.
+Ochranná poloha sa naďalej nastavuje medzi cieľovými polohami žalúzie.
+
+Vyklopené okno už nemá vlastný senzor, nastavenia ani vetvu rozhodovania či
+predikcie. Migrácia na schému vstupu 1.3 odstráni šesť starých nastavení bez
+premapovania na kontakt otvorenia. Identita žalúzie a ostatné parametre ostanú.
+Starý runtime vyklopenia a jeho korekcia sa vyčistia; migrácia neposiela povel
+motoru. Pri ďalšom bežnom vyhodnotení platia aktuálne pravidlá automatizácie.
+Vetranie, jeho jednorazový štart/koniec, korekcie ±20 percentuálnych bodov počas
+120 sekúnd a bezpečnostné blokovanie Force pri otvorenom kontakte zostávajú.

@@ -274,36 +274,24 @@
         "data": {
           "ventilation_enabled": "Povoliť vetranie a kontakty",
           "window_open": "Kontakt otvoreného okna",
-          "window_tilted": "Kontakt vyklopeného okna",
-          "contact_lockout_enabled": "Ochrana proti zatvoreniu pri otvorenom kontakte",
+          "contact_lockout_enabled": "Ochrana priechodu",
           "contact_delay": "Potvrdenie spúšťača kontaktu",
           "contact_state_delay": "Oneskorenie stavu kontaktu",
-          "tilted_lockout": "Blokácia pri vyklopení",
           "shading_over_ventilation": "Uprednostniť tienenie pred vetraním",
           "prevent_open_vent_end": "Po vetraní neotvárať",
           "vent_start_no_delay": "Vetranie bez oneskorenia jazdy",
-          "vent_return_delay": "Po zatvorení okna použiť oneskorenie jazdy",
-          "vent_lower_from_above": "Pri vyklopení znížiť vyššiu polohu na vetranie",
-          "vent_after_shade": "Po tienení použiť vetraciu polohu",
-          "vent_keep_full_tilt": "Pri prechode otvorené → vyklopené zachovať otvorenie",
-          "tilted_blocks": "Vyklopené okno blokuje"
+          "vent_return_delay": "Po zatvorení okna použiť oneskorenie jazdy"
         },
         "data_description": {
           "ventilation_enabled": "Pri vypnutí sa kontakty ignorujú aj pri blokovaní zatvorenia.",
           "window_open": "Vyber zdroj pre nastavenie „Kontakt otvoreného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
-          "window_tilted": "Vyber zdroj pre nastavenie „Kontakt vyklopeného okna“. Prázdny výber tento voliteľný zdroj nepoužije.",
-          "contact_lockout_enabled": "Zapne pravidlo „Ochrana proti zatvoreniu pri otvorenom kontakte“ pre túto žalúziu. Po vypnutí sa toto pravidlo neuplatní.",
+          "contact_lockout_enabled": "Pri otvorenom okne alebo dverách drží žalúziu v bezpečnej polohe. Po potvrdenom zatvorení chráni priechod ešte 30 minút. Vypnutím tejto ochrany kontakt slúži iba na vetranie.",
           "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
           "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
-          "tilted_lockout": "Určuje, ktoré pohyby obmedzí vyklopené okno: bezpečná minimálna poloha, len zatváranie, všetky pohyby alebo žiadne.",
           "shading_over_ventilation": "Pri súčasne aktívnom tienení a vetraní uprednostní polohu tienenia, pri zachovaní ochrany kontaktov.",
           "prevent_open_vent_end": "Po skončení vetrania zabráni návratu smerom k otvorenej polohe.",
           "vent_start_no_delay": "Pri začiatku vetrania vynechá bežné pevné a náhodné oneskorenie pred pohybom.",
-          "vent_return_delay": "Pri návrate po zatvorení okna použije bežné oneskorenie pred pohybom.",
-          "vent_lower_from_above": "Pri vyklopení dovolí znížiť vyššiu aktuálnu polohu na nastavenú polohu vetrania.",
-          "vent_after_shade": "Ak je okno vyklopené aj po skončení tienenia, použije polohu vetrania.",
-          "vent_keep_full_tilt": "Pri zmene kontaktu z otvoreného na vyklopené okno ponechá plné otvorenie žalúzie.",
-          "tilted_blocks": "Automatické akcie, ktoré sa nesmú vykonať pri vyklopenom okne podľa zvolenej ochrany."
+          "vent_return_delay": "Pri návrate po zatvorení okna použije bežné oneskorenie pred pohybom."
         }
       },
       "manual": {

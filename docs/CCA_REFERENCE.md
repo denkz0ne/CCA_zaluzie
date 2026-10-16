@@ -30,7 +30,7 @@ A new integration should own persistent configuration and runtime state itself; 
 - **Awning**: reversed position orientation.
 - **Sunshade**: separate type-specific position semantics.
 
-CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The user's current hardware is ordinary vertical blinds/shutters that move up/down. The only confirmed feature exclusion from CCA is venetian slat tilt / lamella-angle automation. Preserve other CCA cover-type semantics, including orientation handling, as applicable. Use Home Assistant cover semantics consistently and expose calibrated position targets rather than assuming motor-native direction.
+CCA's numeric values are not always intuitive: for blinds/shutters, open is commonly 100 and closed 0; awnings invert this (open 0, closed 100). The user's current hardware is ordinary vertical blinds/shutters that move up/down. The confirmed exclusions are venetian slat tilt / lamella-angle automation and, from 2026.12.6, tilted-window contact sensing and behavior. Preserve other CCA cover-type semantics, including orientation handling, as applicable. Use Home Assistant cover semantics consistently and expose calibrated position targets rather than assuming motor-native direction.
 
 ### Position handling
 - Position source can be standard `current_position`, an alternate position attribute, or a custom sensor.
@@ -92,7 +92,7 @@ Shading is time-window constrained unless configured otherwise. Pending must be 
 - When ventilation is disabled, CCA ignores configured contacts throughout its logic (including scheduled close/shading/recovery), not merely the proactive ventilation movement.
 - Force position outranks contact lockouts.
 
-For our integration, show contact status and reason for blocked movement on each blind; don't collapse “window open”, “window tilted” and “ventilation target” into one boolean.
+For our integration, show the ordinary open/closed contact and the reason for blocked movement. From 2026.12.6 the upstream tilted-window branches described above are excluded entirely. Ventilation targets remain distinct from contact state.
 
 ## Resident / sleep mode
 
@@ -163,7 +163,7 @@ This repository currently documents observed behavior and design requirements; i
 | Morning/evening schedule, early/late windows, workday/non-workday | Preserve behavior; simplify setup with presets and an advanced section |
 | Brightness/sun elevation triggers, stable duration, hysteresis, AND/OR | Preserve logic and expose only enabled sensor fields |
 | Sun shading start/end, azimuth/elevation, brightness, temperatures, forecast/weather, custom conditions | Preserve all applicable CCA branches; shading moves the whole cover to partial height |
-| Ventilation, open/tilted contacts, lockouts, debounce | Preserve; tilted window means contact state only, never slat tilt |
+| Ventilation, open/tilted contacts, lockouts, debounce | Preserve ordinary open/closed contacts, ventilation, lockouts and debounce; exclude tilted-window contacts |
 | Resident/sleep mode | Preserve |
 | Manual override detection, blocking selections, adoption, timeout/reset/return | Preserve |
 | Force open/close/ventilate/shading, force pause, background target tracking/recovery | Preserve priority semantics, document exact pause-versus-emergency policy |

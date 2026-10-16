@@ -118,13 +118,6 @@ def _shade_candidate(cfg, rt, snap, phase):
                 if cfg["contact_lockout_enabled"]
                 else cfg["vent_position"]
             )
-        elif (
-            cfg["window_tilted"]
-            and snap.get(cfg["window_tilted"]).boolean() is True
-            and (not resident or cfg["resident_allow_vent"])
-            and not (rt.base_action == "open" and rt.base_owned)
-        ):
-            target = cfg["vent_position"]
     return target
 
 
@@ -223,6 +216,19 @@ def _position(cfg: dict, snap: Snapshot) -> float | None:
     return snap.get(cfg["cover_entity"]).number(cfg["position_source"])
 
 
+def _ventilation_active(cfg: dict, rt: Runtime, now: datetime) -> bool:
+    """Ordinary open-contact or one-shot ventilation, excluding passage protection."""
+    if not cfg["ventilation_enabled"]:
+        return False
+    today = now.date().isoformat()
+    if rt.phase_latches.get("vent_end") == today:
+        return False
+    return bool(
+        (cfg["window_open"] and rt.last_window == "open" and not cfg["contact_lockout_enabled"])
+        or rt.phase_latches.get("vent_start") == today
+    )
+
+
 def mark_manual(
     cfg: dict, rt: Runtime, position: float | None, now: datetime, snap: Snapshot | None = None
 ) -> bool:
@@ -239,7 +245,7 @@ def mark_manual(
             if cfg["shade_alt_entity"] and snap.get(cfg["shade_alt_entity"]).boolean() is True
             else cfg["shade_position"]
         )
-    elif cfg["ventilation_enabled"] and rt.last_window == "tilted":
+    elif _ventilation_active(cfg, rt, now):
         correction_mode = "ventilation"
         correction_base = cfg["vent_position"]
     if correction_mode and position is not None and rt.manual_since is None and not rt.last_force:
@@ -502,7 +508,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         shade_window = True
     elif rt.shading and natural_start_gate is True:
         today_phase.pop("shade_start", None)
-    ventilation_active = cfg["ventilation_enabled"] and rt.last_window == "tilted"
+    ventilation_active = _ventilation_active(cfg, rt, now)
     if not rt.shading and ventilation_active and shade_gate is True:
         shade_gate = False
         trace["phase.deferred"] = "shading waits for active ventilation to finish"
@@ -660,45 +666,33 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     window = "closed"
     previous_window = rt.last_window
     if cfg["ventilation_enabled"]:
-        for field, name in (("window_open", "open"), ("window_tilted", "tilted")):
-            if not cfg[field]:
-                continue
-            value = snap.get(cfg[field]).boolean()
-            contact_unknown |= value is None
+        if cfg["window_open"]:
+            value = snap.get(cfg["window_open"]).boolean()
+            contact_unknown = value is None
             if value is not True:
-                rt.stable.pop(f"contact.{name}", None)
+                rt.stable.pop("contact.open", None)
             if value is not False:
-                rt.stable.pop(f"contact.{name}.release", None)
+                rt.stable.pop("contact.open.release", None)
             delay = cfg["contact_delay"] + cfg["contact_state_delay"]
-            if field == "window_open":
-                if value is True:
-                    # A newly opened or unconfirmed passage always rearms protection.
-                    rt.contact_lockout_until = None
-                    rt.contact_closed_verified_at = None
-                    rt.contact_lockout_release_used = False
-                    rt.stable.pop("contact.closed", None)
-                elif value is False:
-                    closed_confirmed = stable("contact.closed", True, delay)
-                    if closed_confirmed:
-                        if rt.contact_closed_verified_at is None:
-                            rt.contact_closed_verified_at = ts
-                else:
-                    rt.contact_closed_verified_at = None
-                    rt.stable.pop("contact.closed", None)
-                # Opening must be quick; closing retains the stable legacy confirmation.
-                contact_delay = min(delay, 2) if value is True else delay
+            if value is True:
+                rt.contact_lockout_until = None
+                rt.contact_closed_verified_at = None
+                rt.contact_lockout_release_used = False
+                rt.stable.pop("contact.closed", None)
+            elif value is False:
+                if stable("contact.closed", True, delay) and rt.contact_closed_verified_at is None:
+                    rt.contact_closed_verified_at = ts
             else:
-                contact_delay = delay
-            if value is False and rt.last_window == name:
-                release = stable(f"contact.{name}.release", True, contact_delay)
-                if not release:
-                    window = name
-            elif stable(f"contact.{name}", value, contact_delay) is True:
-                window = name
+                rt.contact_closed_verified_at = None
+                rt.stable.pop("contact.closed", None)
+            contact_delay = min(delay, 2) if value is True else delay
+            if value is False and rt.last_window == "open":
+                if not stable("contact.open.release", True, contact_delay):
+                    window = "open"
+            elif stable("contact.open", value, contact_delay) is True:
+                window = "open"
             elif value is True:
                 contact_pending = True
-            if window == "open":
-                break
         if window == "open":
             if cfg["contact_lockout_enabled"]:
                 target, mode, action, reason = (
@@ -719,27 +713,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
                 suppressed.append("ventilation")
             if mode != "shading":
                 suppressed.extend(("schedule", "shading"))
-        elif window == "tilted" and (not resident or cfg["resident_allow_vent"]):
-            if rt.last_window == "open" and cfg["vent_keep_full_tilt"]:
-                rt.keep_full_tilt = True
-            scheduled_open = mode == "schedule" and rt.base_action == "open" and rt.base_owned
-            shading_wins = mode == "shading"
-            if rt.keep_full_tilt:
-                target, mode, action, reason = (
-                    cfg["lockout_position"],
-                    "window_lockout",
-                    "ventilate",
-                    "Po otvorenom okne sa zachová ochranná poloha",
-                )
-            elif not scheduled_open and not shading_wins:
-                target, mode, action, reason = (
-                    cfg["vent_position"],
-                    "ventilation",
-                    "ventilate",
-                    "Vyklopené okno · vetracia poloha",
-                )
         elif rt.last_window != "closed" and window == "closed":
-            rt.keep_full_tilt = False
             rt.transition_action = action = "ventilate_end"
             if (
                 previous_window == "open"
@@ -968,14 +942,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         )
         behavior_guard |= cfg["prevent_open_shade_end"] and action == "shade_end" and toward_open
         behavior_guard |= cfg["prevent_open_vent_end"] and action == "ventilate_end" and toward_open
-        behavior_guard |= (
-            mode == "ventilation"
-            and action == "ventilate"
-            and not cfg["vent_lower_from_above"]
-            and rt.base_action not in ("close",)
-            and not rt.shading
-            and position > target + cfg["position_tolerance"]
-        )
     if behavior_guard:
         trace["behavior.guard"] = True
         inhibit = "behavior_guard"
@@ -999,21 +965,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and mode != "window_lockout"
     ):
         inhibit = "manual"
-    if (
-        cfg["ventilation_enabled"]
-        and window == "tilted"
-        and cfg["tilted_lockout"] == "all"
-        and not force
-    ):
-        inhibit = "window_tilted"
-    if (
-        cfg["ventilation_enabled"]
-        and window == "tilted"
-        and cfg["tilted_lockout"] == "close_only"
-        and target == cfg["close_position"]
-        and not force
-    ):
-        inhibit = "window_tilted"
     if contact_unknown and (not force or force_contact_blocked):
         inhibit = "contact_unknown"
     if contact_pending and not force:
@@ -1039,13 +990,6 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
             )
             if cfg["contact_lockout_enabled"] and toward_close:
                 inhibit = "contact_lockout"
-    if (
-        cfg["ventilation_enabled"]
-        and window == "tilted"
-        and action in cfg["tilted_blocks"]
-        and not force
-    ):
-        inhibit = "window_tilted"
     if cfg["resident_sensor"] and resident is None and not force:
         inhibit = "resident_unknown"
     gates = ["global", action]

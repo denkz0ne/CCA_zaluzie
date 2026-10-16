@@ -73,27 +73,27 @@ def test_shading_end_owns_open_return_even_if_morning_is_disabled():
     assert decision.inhibit is None
 
 
-def test_evening_close_to_vent_floor_keeps_manual_closing_policy():
+def test_evening_close_during_ordinary_ventilation_keeps_manual_closing_policy():
     cfg = config(
         ventilation_enabled=True,
-        window_tilted="binary_sensor.tilt",
+        window_open="binary_sensor.window", contact_lockout_enabled=False,
         contact_delay=0,
         manual_blocks=["close"],
         manual_reset_daily=False,
         manual_timeout=0,
     )
     rt = Runtime(manual_since=NOW.timestamp())
-    snap = world(**{"binary_sensor.tilt": Reading("on")})
+    snap = world(**{"binary_sensor.window": Reading("on")})
     evaluate(cfg, rt, snap, NOW.replace(hour=12))
     decision = evaluate(cfg, rt, snap, NOW.replace(hour=22))
     assert decision.action == "ventilate"
     assert decision.inhibit == "manual"
 
 
-def test_evening_close_to_vent_floor_keeps_native_closing_condition():
-    cfg = config(ventilation_enabled=True, window_tilted="binary_sensor.tilt", contact_delay=0)
+def test_evening_close_during_ordinary_ventilation_keeps_native_closing_condition():
+    cfg = config(ventilation_enabled=True, window_open="binary_sensor.window", contact_lockout_enabled=False, contact_delay=0)
     rt = Runtime()
-    snap = world(**{"binary_sensor.tilt": Reading("on")})
+    snap = world(**{"binary_sensor.window": Reading("on")})
     evaluate(cfg, rt, snap, NOW.replace(hour=12))
     snap.gates = {"close": False, "ventilate": True}
     decision = evaluate(cfg, rt, snap, NOW.replace(hour=22))

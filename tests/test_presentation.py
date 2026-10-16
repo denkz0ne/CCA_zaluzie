@@ -67,7 +67,7 @@ def test_future_sensor_condition_has_range_not_promised_time():
     assert result["status"] == "waiting_conditions"
 
 
-@pytest.mark.parametrize("inhibit", ["paused", "contact_unknown", "window_tilted", "disabled"])
+@pytest.mark.parametrize("inhibit", ["paused", "contact_unknown", "condition", "disabled"])
 def test_other_blocks_do_not_promise_motor_time(inhibit):
     cfg, rt, snap, decision = scenario(manual_return=True)
     decision.inhibit = inhibit
