@@ -66,7 +66,20 @@ async def test_history_merges_recorder_without_mutating_measured_history(
     result = await controller.async_panel_history(24)
     assert result["points"] == [{"at": at, "position": 35, "available": True}]
     assert controller._measured_history.to_dict() == before
-    assert set(result) == {"points", "events", "start", "end"}
+    assert set(result) == {"points", "events", "start", "end", "solar", "time_zone"}
+    assert result["time_zone"] == hass.config.time_zone
+    assert 289 <= len(result["solar"]) <= 292
+    assert result["solar"][0]["at"] == result["start"]
+    assert result["solar"][-1]["at"] == result["end"]
+    assert all(-90 <= point["elevation"] <= 90 for point in result["solar"])
+    assert any(point["elevation"] == 0 for point in result["solar"])
+    from astral import Observer
+    from astral.sun import elevation
+
+    observer = Observer(latitude=hass.config.latitude, longitude=hass.config.longitude)
+    assert result["solar"][0]["elevation"] == pytest.approx(
+        elevation(observer, dt_util.parse_datetime(result["start"])), abs=0.0001
+    )
 
 
 async def test_missing_recorder_falls_back_to_store(hass, controller):
