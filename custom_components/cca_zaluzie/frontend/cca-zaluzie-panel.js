@@ -64,7 +64,6 @@ const inhibits = {
   contact_lockout: "Ochrana po zatvorení kontaktu",
   resident_unknown: "Neznámy režim obyvateľa",
   condition: "Podmienka nepovoľuje pohyb",
-  window_tilted: "Vyklopené okno blokuje pohyb",
   instance_disabled: "Automatizácia zablokovaná",
   manual_reset_hold: "Čaká na ďalšiu udalosť",
   startup_hold: "Po štarte čaká na ďalšiu udalosť",
@@ -287,25 +286,17 @@ const sections = {
       [
         "ventilation_enabled",
         "window_open",
-        "window_tilted",
         "contact_delay",
         "contact_state_delay",
       ],
     ],
     [
-      "Bezpečnostné blokácie",
-      ["tilted_lockout", "tilted_blocks", "shading_over_ventilation"],
+      "Ochrana priechodu",
+      ["contact_lockout_enabled", "shading_over_ventilation"],
     ],
     [
       "Vetranie a návrat",
-      [
-        "vent_start_no_delay",
-        "vent_return_delay",
-        "vent_lower_from_above",
-        "vent_after_shade",
-        "vent_keep_full_tilt",
-        "prevent_open_vent_end",
-      ],
+      ["vent_start_no_delay", "vent_return_delay", "prevent_open_vent_end"],
     ],
   ],
   manual: [
@@ -949,7 +940,6 @@ export class CCAZaluziePanel extends HTMLElement {
       config.shading_enabled && config.temperature_sensor1,
       config.shading_enabled && config.temperature_sensor2,
       config.ventilation_enabled && config.window_open,
-      config.ventilation_enabled && config.window_tilted,
       config.resident_sensor,
       config.instance_entity,
       config.shade_custom_sensor,
@@ -1292,7 +1282,7 @@ export class CCAZaluziePanel extends HTMLElement {
     keys = keys.filter((k) => this._fields[k]);
     const first = this._fields[keys[0]],
       main = first?.kind === "bool" ? first : null;
-    return `<section class="card settings-card"><div class="feature-header"><div class="feature-title"><h3>${esc(title)}</h3>${main ? this._help(main) : ""}</div>${main ? this._field(main, cfg) : ""}</div><div class="field-grid">${keys
+    return `<section class="card settings-card"><div class="feature-header"><div class="feature-title"><h3>${esc(title)}</h3>${main ? this._help(main) : ""}</div>${main ? this._field(main, cfg) : ""}</div>${main?.key === "contact_lockout_enabled" ? `<p class="field-hint">${esc(main.help)}</p>` : ""}<div class="field-grid">${keys
       .filter((k) => k !== main?.key)
       .map((k) => this._field(this._fields[k], cfg))
       .join("")}</div></section>`;

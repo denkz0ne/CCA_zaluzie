@@ -1,4 +1,4 @@
-# Feature mapping — 2026.12.5
+# Feature mapping — 2026.12.6
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -32,7 +32,7 @@ with Home Assistant's vertical position convention at the service boundary.
 | Mode correction, exclusive shading/ventilation, phase actions and morning movement merge | Implemented | Internal ±20 percentage-point / 120-second correction session, serialized active phases including contact changes during shading, confirmed 30-minute morning merge and one-shot phase controls; engine and browser tests |
 | Selected-weather stabilization and Force/contact safety | Implemented | Internal asymmetric confirmation based on each cover's selected states; enabled passage lockout prevents Force-close on open or unknown contact; regression tests |
 | Blueprint input_text helper and automation traces | Replaced | Integration-owned storage and structured event/condition history |
-| Lamella actuator tilt, tilt bands/waits/reposition | Excluded by user | No tilt service or tilt target is sent; tilted-window contact remains supported |
+| Lamella actuator tilt, tilt bands/waits/reposition | Excluded by user | No tilt service or tilt target is sent; tilted-window contact is also explicitly excluded from 2026.12.6 |
 
 ## Verification boundary
 
@@ -47,3 +47,7 @@ and end-stop behavior must be checked after installation before enabling automat
 
 Copying settings between covers remains a proposal for a later version. It is not
 included in this release.
+
+## Window contacts in 2026.12.6
+
+A single ordinary open/closed contact supports ventilation and passage protection. Tilted-window sensing and all six associated options are retired. Entry migration 1.3 drops their values without mapping them to the ordinary contact. Runtime migration removes obsolete tilted state and its ventilation correction, without sending commands.

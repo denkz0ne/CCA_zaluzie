@@ -802,13 +802,14 @@ async def test_live_prediction_keeps_runtime_and_never_dispatches(hass, entry):
     assert controller.history == before_history
 
 
-async def test_config_entry_migration_retires_schedule_light_and_calendar_only(hass):
+@pytest.mark.parametrize("minor", [1, 2])
+async def test_config_entry_migration_retires_obsolete_inputs_without_changing_identity(hass, minor):
     config_entry = MockConfigEntry(
         domain=DOMAIN,
         title="Test blind",
         unique_id="cover.blind",
         version=1,
-        minor_version=1,
+        minor_version=minor,
         data={"cover_entity": "cover.blind", "name": "Test blind", "morning_late": "08:15"},
         options={
             "calendar_enabled": True,
@@ -816,13 +817,29 @@ async def test_config_entry_migration_retires_schedule_light_and_calendar_only(h
             "lux_enabled": True,
             "lux_sensor": "sensor.old_lux",
             "shade_lux_sensor": "sensor.shade_lux",
+            "window_tilted": "binary_sensor.retired_tilt",
+            "tilted_lockout": "all",
+            "tilted_blocks": ["close"],
+            "vent_keep_full_tilt": True,
+            "vent_lower_from_above": True,
+            "vent_after_shade": True,
         },
     )
     config_entry.add_to_hass(hass)
 
+    original_id = config_entry.entry_id
+    service_calls = []
+    unsubscribe = hass.bus.async_listen(EVENT_CALL_SERVICE, lambda event: service_calls.append(event.data))
     assert await async_migrate_entry(hass, config_entry)
+    await hass.async_block_till_done()
+    unsubscribe()
+    assert service_calls == []
+    assert config_entry.entry_id == original_id
+    assert config_entry.unique_id == "cover.blind"
+    assert not any(key in config_entry.data for key in ("window_tilted", "tilted_lockout", "tilted_blocks", "vent_keep_full_tilt", "vent_lower_from_above", "vent_after_shade"))
+    assert not config_entry.data["window_open"]
 
-    assert config_entry.minor_version == 2
+    assert config_entry.minor_version == 3
     assert config_entry.options == {}
     assert config_entry.data["morning_late"] == "08:15"
     assert config_entry.data["shade_lux_sensor"] == "sensor.shade_lux"
@@ -830,3 +847,23 @@ async def test_config_entry_migration_retires_schedule_light_and_calendar_only(h
     assert "calendar_enabled" not in config_entry.data
     assert "lux_enabled" not in config_entry.data
     assert config_entry.data["cover_entity"] == "cover.blind"
+
+
+async def test_retired_contact_is_not_a_live_input_or_subscription(hass, entry, monkeypatch):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config = validate_config({**controller.config, "window_tilted": "binary_sensor.retired_tilt"})
+    hass.states.async_set("binary_sensor.retired_tilt", "off")
+    await hass.async_block_till_done()
+    assert "binary_sensor.retired_tilt" not in controller._snapshot_inputs().entities
+    evaluations = []
+
+    async def evaluated(*args, **kwargs):
+        evaluations.append(True)
+
+    monkeypatch.setattr(controller, "async_evaluate", evaluated)
+    for state in ("on", "unknown", "unavailable", "off"):
+        hass.states.async_set("binary_sensor.retired_tilt", state)
+        await hass.async_block_till_done()
+    assert evaluations == []
+    assert calls == []

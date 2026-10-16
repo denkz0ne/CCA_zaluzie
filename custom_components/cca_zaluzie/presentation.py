@@ -31,7 +31,6 @@ BLOCKS = {
     "contact_unknown": "Stav okenného kontaktu nie je známy.",
     "contact_pending": "Čaká sa na potvrdenie okenného kontaktu.",
     "contact_lockout": "Zatvorenie čaká na skončenie 30-minútovej ochrany po zatvorení kontaktu.",
-    "window_tilted": "Pohyb blokuje otvorené okno.",
     "unavailable": "Žalúzia nie je dostupná.",
     "position_unknown": "Potvrdená poloha žalúzie nie je známa.",
     "condition": "Čaká sa na splnenie podmienok pohybu.",
@@ -141,7 +140,7 @@ def build_presentation(
             (sensors and first != last and ts < last)
             or bool(cfg["global_conditions"] or cfg.get(f"{action}_conditions"))
             or bool(cfg["resident_sensor"] or cfg["instance_entity"])
-            or (cfg["ventilation_enabled"] and bool(cfg["window_open"] or cfg["window_tilted"]))
+            or (cfg["ventilation_enabled"] and bool(cfg["window_open"]))
             or (manual_blocks and manual_end is None)
         )
         next_action = _action(

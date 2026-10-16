@@ -89,7 +89,7 @@ async def async_validate_native(hass, config: dict) -> None:
 
 class CCAConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     def __init__(self):
         self._data = {}

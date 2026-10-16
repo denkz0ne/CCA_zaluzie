@@ -125,10 +125,10 @@ def test_unknown_cancels_pending_start_without_moving():
     assert d.conditions["shade.brightness"] is None
 
 
-def test_active_shading_finishes_before_tilted_contact_starts_ventilation():
+def test_active_shading_finishes_before_open_contact_starts_ventilation():
     cfg = shade_config(
         ventilation_enabled=True,
-        window_tilted="binary_sensor.window",
+        window_open="binary_sensor.window", contact_lockout_enabled=False,
         shading_over_ventilation=False,
         shade_start_delay=0,
         contact_delay=0,
@@ -173,7 +173,7 @@ def test_active_shading_is_not_replaced_by_ordinary_open_contact():
 def test_active_ventilation_finishes_before_shading_starts():
     cfg = shade_config(
         ventilation_enabled=True,
-        window_tilted="binary_sensor.window",
+        window_open="binary_sensor.window", contact_lockout_enabled=False,
         shade_start_delay=0,
         contact_delay=0,
         contact_state_delay=0,
@@ -277,10 +277,10 @@ def test_early_shading_end_suppresses_today_but_not_tomorrows_plan():
     assert tomorrow.mode == "shading"
 
 
-def test_early_ventilation_end_suppresses_same_tilt_but_a_new_cycle_can_start():
+def test_early_ventilation_end_suppresses_same_contact_but_a_new_cycle_can_start():
     cfg = config(
         time_enabled=False, morning_enabled=False, evening_enabled=False,
-        ventilation_enabled=True, window_tilted="binary_sensor.window",
+        ventilation_enabled=True, window_open="binary_sensor.window", contact_lockout_enabled=False,
         contact_delay=0, contact_state_delay=0,
     )
     rt = Runtime(phase_latches={"vent_start": NOW.date().isoformat()})
@@ -468,7 +468,7 @@ def test_force_wins_over_manual_contacts_but_pause_inhibits():
         morning_enabled=False,
         evening_enabled=False,
         ventilation_enabled=True,
-        window_tilted="binary_sensor.window",
+        window_open="binary_sensor.window", contact_lockout_enabled=False,
         force_close="input_boolean.force",
         force_pause="input_boolean.pause",
         contact_delay=0,
@@ -719,12 +719,12 @@ def test_post_close_lockout_round_trips_in_persisted_runtime():
     assert restored.contact_lockout_release_used is True
 
 
-def test_tilted_window_keeps_scheduled_open_and_floors_close():
+def test_retired_tilted_window_cannot_change_either_daily_plan():
     cfg = config(ventilation_enabled=True, window_tilted="binary_sensor.window", contact_delay=0)
     rt = Runtime()
     snap = world(**{"binary_sensor.window": Reading("on")})
     assert evaluate(cfg, rt, snap, NOW).target == 100
-    assert evaluate(cfg, rt, snap, NOW.replace(hour=22)).target == 30
+    assert evaluate(cfg, rt, snap, NOW.replace(hour=22)).target == 0
 
 
 def test_manual_only_blocks_selected_actions_and_reset_retains_position_policy():
@@ -793,7 +793,7 @@ def test_ventilation_manual_correction_is_scoped_to_active_phase():
         morning_enabled=False,
         evening_enabled=False,
         ventilation_enabled=True,
-        window_tilted="binary_sensor.window",
+        window_open="binary_sensor.window", contact_lockout_enabled=False,
         contact_delay=0,
         contact_state_delay=0,
     )

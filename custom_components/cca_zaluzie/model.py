@@ -74,7 +74,6 @@ class Runtime:
     shade_started_day: str | None = None
     close_keep_shade: bool = False
     transition_action: str | None = None
-    keep_full_tilt: bool = False
     pending: str | None = None
     pending_since: float | None = None
     pending_due: float | None = None
@@ -120,7 +119,18 @@ class Runtime:
     @classmethod
     def from_dict(cls, value: dict) -> Runtime:
         known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in value.items() if k in known})
+        cleaned = {k: v for k, v in value.items() if k in known}
+        if cleaned.get("last_window") == "tilted":
+            cleaned["last_window"] = "closed"
+            if cleaned.get("correction_mode") == "ventilation":
+                for key in [key for key in cleaned if key.startswith("correction_")]:
+                    cleaned[key] = None
+        if "stable" in cleaned:
+            cleaned["stable"] = {
+                key: item for key, item in cleaned["stable"].items()
+                if not key.startswith("contact.tilted")
+            }
+        return cls(**cleaned)
 
 
 @dataclass

@@ -129,7 +129,6 @@ def _assumed_snapshot(
     # in the future. Their uncertainty is carried on every resulting event.
     for key, value in (
         ("window_open", "off"),
-        ("window_tilted", "off"),
         ("resident_sensor", "off"),
         ("force_pause", "off"),
         ("force_open", "off"),

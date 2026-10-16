@@ -88,3 +88,19 @@ oznámi panel a zvolí ďalšiu dostupnú položku. Úspešné oznámenie sa zav
 
 Aktualizácia integrácie nemení uložené entity, rozvrhy ani mechaniku CCA.
 Home Assistant vyžaduje po nainštalovaní vydania používateľský reštart.
+
+## Okná a ochrana priechodu — 2026.12.6
+
+V konfigurácii vyber **Okná a vetranie → Ochrana priechodu**. Veľký prepínač
+chráni priechod pri otvorenom okne alebo dverách a ešte 30 minút po potvrdenom
+zatvorení. Vyžaduje zapnuté spracovanie kontaktov a bežný kontakt otvorenia.
+Vypnutím ochrany sa kontakt používa na vetranie; nejde o vypnutie celého riadenia.
+Ochranná poloha sa naďalej nastavuje medzi cieľovými polohami žalúzie.
+
+Vyklopené okno už nemá vlastný senzor, nastavenia ani vetvu rozhodovania či
+predikcie. Migrácia na schému vstupu 1.3 odstráni šesť starých nastavení bez
+premapovania na kontakt otvorenia. Identita žalúzie a ostatné parametre ostanú.
+Starý runtime vyklopenia a jeho korekcia sa vyčistia; migrácia neposiela povel
+motoru. Pri ďalšom bežnom vyhodnotení platia aktuálne pravidlá automatizácie.
+Vetranie, jeho jednorazový štart/koniec, korekcie ±20 percentuálnych bodov počas
+120 sekúnd a bezpečnostné blokovanie Force pri otvorenom kontakte zostávajú.
