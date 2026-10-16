@@ -239,6 +239,13 @@ def test_one_shot_ventilation_waits_for_active_shading_to_finish():
     assert rt.phase_latches["vent_start"] == NOW.date().isoformat()
 
     rt.transition_action = None
+    rt.command = {"action": "shade_end", "status": "moving", "target": shade_end.target}
+    while_shade_moves = evaluate(cfg, rt, world(), NOW + timedelta(seconds=30))
+
+    assert while_shade_moves.mode != "ventilation"
+    assert rt.phase_latches["vent_start"] == NOW.date().isoformat()
+
+    rt.command["status"] = "completed"
     after_shading = evaluate(cfg, rt, world(), NOW + timedelta(minutes=1))
 
     assert after_shading.mode == "ventilation"

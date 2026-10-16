@@ -724,6 +724,11 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         rt.last_window = window
     vent_started = rt.phase_latches.get("vent_start") == today
     vent_ended = rt.phase_latches.get("vent_end") == today
+    shade_end_in_flight = bool(
+        rt.command
+        and rt.command.get("action") == "shade_end"
+        and rt.command.get("status") in ("requested", "moving", "custom_sent")
+    )
     if window == "closed" and previous_window != "closed":
         rt.phase_latches.pop("vent_end", None)
         rt.phase_latches.pop("vent_start", None)
@@ -734,6 +739,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and cfg["ventilation_enabled"]
         and not rt.shading
         and rt.transition_action != "shade_end"
+        and not shade_end_in_flight
         and window != "open"
         and not contact_unknown
     ):
