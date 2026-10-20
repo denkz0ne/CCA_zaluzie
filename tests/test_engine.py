@@ -1072,3 +1072,27 @@ def test_normal_forecast_gate_can_use_second_temperature_sensor():
     )
     snap = shaded_world(**{"sensor.temp": Reading("30"), "sensor.forecast": Reading("20")})
     assert evaluate(cfg, Runtime(), snap, NOW.replace(hour=12)).mode == "shading"
+
+
+@pytest.mark.parametrize("contact", ["unknown", "unavailable"])
+@pytest.mark.parametrize("open_position,close_position,position", [(100, 0, 11), (0, 100, 89)])
+def test_unknown_contact_allows_confirmed_opening_but_still_blocks_closing(contact, open_position, close_position, position):
+    cfg = config(ventilation_enabled=True, contact_lockout_enabled=True,
+                 window_open="binary_sensor.passage", open_position=open_position,
+                 close_position=close_position, morning_early="06:00", morning_late="08:00")
+    snap = world(**{"cover.blind": Reading("open", {"current_position": position}),
+                    "binary_sensor.passage": Reading(contact)})
+    opening = evaluate(cfg, Runtime(), snap, NOW)
+    assert opening.target == open_position
+    assert opening.inhibit is None
+    closing = evaluate(cfg, Runtime(), snap, NOW.replace(hour=22))
+    assert closing.target == close_position
+    assert closing.inhibit == "contact_unknown"
+
+
+@pytest.mark.parametrize("position", [None, 100])
+def test_unknown_contact_without_confirmed_opening_keeps_protection(position):
+    cfg = config(ventilation_enabled=True, window_open="binary_sensor.passage")
+    snap = world(**{"cover.blind": Reading("open", {"current_position": position}),
+                    "binary_sensor.passage": Reading("unavailable")})
+    assert evaluate(cfg, Runtime(), snap, NOW).inhibit == "contact_unknown"
