@@ -559,7 +559,7 @@ def test_contact_lockout_off_never_starts_post_close_protection():
     assert rt.contact_lockout_until is None
 
 
-def test_unknown_passage_contact_blocks_force_close():
+def test_unknown_passage_contact_is_unassigned_for_force_close():
     cfg = config(
         ventilation_enabled=True,
         window_open="binary_sensor.passage",
@@ -576,7 +576,7 @@ def test_unknown_passage_contact_blocks_force_close():
 
     decision = evaluate(cfg, Runtime(), snap, NOW)
 
-    assert decision.inhibit == "contact_unknown"
+    assert decision.inhibit != "contact_unknown"
 
 
 def test_open_passage_contact_blocks_force_close_before_debounce_finishes():
@@ -650,12 +650,12 @@ def test_disabled_ventilation_ignores_all_contacts():
     assert evaluate(cfg, Runtime(), snap, NOW.replace(hour=22)).target == 0
 
 
-def test_unknown_contact_inhibits_close():
+def test_unknown_contact_is_unassigned_for_close():
     cfg = config(ventilation_enabled=True, window_open="binary_sensor.window")
     d = evaluate(
         cfg, Runtime(), world(**{"binary_sensor.window": Reading("unknown")}), NOW.replace(hour=22)
     )
-    assert d.inhibit == "contact_unknown"
+    assert d.inhibit != "contact_unknown"
 
 
 def test_passage_rearms_persisted_post_close_lockout_and_expires():
@@ -683,7 +683,7 @@ def test_passage_rearms_persisted_post_close_lockout_and_expires():
     assert expired.inhibit != "contact_lockout"
 
 
-def test_reopening_passage_resets_post_close_protection_and_unknown_is_safe():
+def test_reopening_passage_resets_protection_and_unknown_is_ignored():
     cfg = config(
         ventilation_enabled=True,
         contact_lockout_enabled=True,
@@ -698,7 +698,7 @@ def test_reopening_passage_resets_post_close_protection_and_unknown_is_safe():
 
     unknown = world(**{"binary_sensor.passage": Reading("unavailable")})
     decision = evaluate(cfg, rt, unknown, NOW + timedelta(seconds=1))
-    assert decision.inhibit == "contact_unknown"
+    assert decision.inhibit != "contact_unknown"
 
 
 def test_runtime_migration_defaults_contact_lockout_state():
@@ -1076,7 +1076,7 @@ def test_normal_forecast_gate_can_use_second_temperature_sensor():
 
 @pytest.mark.parametrize("contact", ["unknown", "unavailable"])
 @pytest.mark.parametrize("open_position,close_position,position", [(100, 0, 11), (0, 100, 89)])
-def test_unknown_contact_allows_confirmed_opening_but_still_blocks_closing(contact, open_position, close_position, position):
+def test_unknown_contact_is_unassigned_for_opening_and_closing(contact, open_position, close_position, position):
     cfg = config(ventilation_enabled=True, contact_lockout_enabled=True,
                  window_open="binary_sensor.passage", open_position=open_position,
                  close_position=close_position, morning_early="06:00", morning_late="08:00")
@@ -1087,12 +1087,37 @@ def test_unknown_contact_allows_confirmed_opening_but_still_blocks_closing(conta
     assert opening.inhibit is None
     closing = evaluate(cfg, Runtime(), snap, NOW.replace(hour=22))
     assert closing.target == close_position
-    assert closing.inhibit == "contact_unknown"
+    assert closing.inhibit is None
 
 
 @pytest.mark.parametrize("position", [None, 100])
-def test_unknown_contact_without_confirmed_opening_keeps_protection(position):
+def test_unknown_contact_does_not_create_a_contact_block(position):
     cfg = config(ventilation_enabled=True, window_open="binary_sensor.passage")
     snap = world(**{"cover.blind": Reading("open", {"current_position": position}),
                     "binary_sensor.passage": Reading("unavailable")})
-    assert evaluate(cfg, Runtime(), snap, NOW).inhibit == "contact_unknown"
+    assert evaluate(cfg, Runtime(), snap, NOW).inhibit != "contact_unknown"
+
+
+@pytest.mark.parametrize("contact", ["unknown", "unavailable", "", "invalid", None])
+def test_invalid_contact_matches_unassigned_and_clears_old_protection(contact):
+    from copy import deepcopy
+    cfg = config(ventilation_enabled=True, window_open="binary_sensor.passage", contact_delay=0, contact_state_delay=0)
+    entities = {"cover.blind": Reading("open", {"current_position": 11})}
+    if contact is not None:
+        entities["binary_sensor.passage"] = Reading(contact)
+    snapshot = Snapshot(entities)
+    original = deepcopy(cfg)
+    rt = Runtime(last_window="open", contact_lockout_until=NOW.replace(hour=22).timestamp()+1800,
+                 contact_closed_verified_at=NOW.timestamp()-10,
+                 stable={"contact.open": NOW.timestamp()-100, "shade.raw": 123})
+    decision = evaluate(cfg, rt, snapshot, NOW.replace(hour=22))
+    clean = evaluate({**cfg, "window_open": ""}, Runtime(last_window="open"), snapshot, NOW.replace(hour=22))
+    assert (decision.target, decision.mode, decision.inhibit) == (clean.target, clean.mode, clean.inhibit)
+    assert decision.conditions["contact.ignored"]["entity"] == "binary_sensor.passage"
+    assert rt.contact_lockout_until is None
+    assert rt.contact_closed_verified_at is None
+    assert not any(key.startswith("contact.") for key in rt.stable)
+    assert cfg == original
+    # A valid report must reactivate the existing selection without a reload.
+    snapshot.entities["binary_sensor.passage"] = Reading("on")
+    assert evaluate(cfg, rt, snapshot, NOW.replace(hour=22)+timedelta(seconds=1)).mode == "window_lockout"

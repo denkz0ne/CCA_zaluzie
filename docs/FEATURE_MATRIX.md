@@ -1,4 +1,4 @@
-# Feature mapping — 2026.12.8
+# Feature mapping — 2026.12.9
 
 Behavior reference: CCA 2026.10.04, upstream commit
 `83e9925c3c0b1bbb96f6f55ef68c00e1c11870cf`. This is an independent implementation,
@@ -51,3 +51,23 @@ included in this release.
 ## Window contacts in 2026.12.6
 
 A single ordinary open/closed contact supports ventilation and passage protection. Tilted-window sensing and all six associated options are retired. Entry migration 1.3 drops their values without mapping them to the ordinary contact. Runtime migration removes obsolete tilted state and its ventilation correction, without sending commands.
+
+## Aktuálne pravidlo kontaktu — 2026.12.9
+
+Používateľ spresnil pravidlo: priradený dverový/okenný kontakt s neznámym,
+nedostupným, chýbajúcim alebo neplatným binárnym stavom sa počas daného
+vyhodnotenia správa **ako nepriradený**. Neblokuje ani otvorenie, ani
+zatvorenie a nevytvára ochranu priechodu. Predchádzajúci časovač kontaktnej
+ochrany a kontaktné potvrdenia sa pri jeho ignorovaní vyčistia. Záznam
+`contact.ignored` zachová dôvod v detailoch, prehľad neukazuje chybu kontaktu.
+
+Výber senzora zostáva uložený a odber zmien zostáva aktívny. Keď senzor
+znovu hlási platný binárny stav (`on`/`off` alebo ekvivalent otvorené/zatvorené),
+integrácia ho automaticky znova použije. Platné otvorenie naďalej chráni
+priechod; platné zatvorenie používa potvrdenie a 30-minútovú ochranu.
+Toto pravidlo nahrádza užšie pravidlo verzie 2026.12.8 popísané vyššie.
+
+Ignoruje sa iba voliteľný kontakt, nie meranie polohy samotnej žalúzie,
+manuálna ochrana ani používateľské podmienky či ostatné senzory riadenia.
+Nastavenia a runtime schéma sa nemenia, nie je potrebné odpájať ani
+prekalibrovať ZHA zariadenie.

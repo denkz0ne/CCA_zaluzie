@@ -867,3 +867,21 @@ async def test_retired_contact_is_not_a_live_input_or_subscription(hass, entry, 
         await hass.async_block_till_done()
     assert evaluations == []
     assert calls == []
+
+
+@pytest.mark.parametrize("state", ["unknown", "unavailable", None])
+async def test_invalid_door_contact_does_not_block_manual_close_with_old_timer(hass, entry, state):
+    config_entry, calls = entry
+    controller = config_entry.runtime_data
+    controller.config.update(ventilation_enabled=True, contact_lockout_enabled=True,
+                             window_open="binary_sensor.passage", contact_delay=0, contact_state_delay=0)
+    if state is not None:
+        hass.states.async_set("binary_sensor.passage", state)
+    await hass.async_block_till_done()
+    controller.runtime.contact_lockout_until = dt_util.now().timestamp() + 600
+    controller.runtime.contact_closed_verified_at = dt_util.now().timestamp() - 10
+    before = len(calls)
+    await controller.async_control("close")
+    assert len(calls) == before + 1
+    assert controller.runtime.contact_lockout_until is None
+    assert controller.config["window_open"] == "binary_sensor.passage"

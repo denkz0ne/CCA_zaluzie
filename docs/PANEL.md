@@ -141,3 +141,23 @@ Ak chýba potvrdená poloha alebo cieľ, bezpečný smer nie je preukázaný a
 blokácia zostáva. Ochrana otvoreného priechodu a 30-minútová ochrana po
 zatvorení sa nemenia. Nie je potrebné vypínať kontakt ani meniť ZHA či
 kalibráciu, aby sa táto oprava uplatnila.
+
+## Aktuálne pravidlo kontaktu — 2026.12.9
+
+Používateľ spresnil pravidlo: priradený dverový/okenný kontakt s neznámym,
+nedostupným, chýbajúcim alebo neplatným binárnym stavom sa počas daného
+vyhodnotenia správa **ako nepriradený**. Neblokuje ani otvorenie, ani
+zatvorenie a nevytvára ochranu priechodu. Predchádzajúci časovač kontaktnej
+ochrany a kontaktné potvrdenia sa pri jeho ignorovaní vyčistia. Záznam
+`contact.ignored` zachová dôvod v detailoch, prehľad neukazuje chybu kontaktu.
+
+Výber senzora zostáva uložený a odber zmien zostáva aktívny. Keď senzor
+znovu hlási platný binárny stav (`on`/`off` alebo ekvivalent otvorené/zatvorené),
+integrácia ho automaticky znova použije. Platné otvorenie naďalej chráni
+priechod; platné zatvorenie používa potvrdenie a 30-minútovú ochranu.
+Toto pravidlo nahrádza užšie pravidlo verzie 2026.12.8 popísané vyššie.
+
+Ignoruje sa iba voliteľný kontakt, nie meranie polohy samotnej žalúzie,
+manuálna ochrana ani používateľské podmienky či ostatné senzory riadenia.
+Nastavenia a runtime schéma sa nemenia, nie je potrebné odpájať ani
+prekalibrovať ZHA zariadenie.

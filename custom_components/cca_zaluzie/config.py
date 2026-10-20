@@ -520,7 +520,7 @@ _HELP = {
     "shade_hold_hot": "Pri pretrvávajúcej vysokej teplote zachová tienenie aj po skončení ostatných podmienok.",
     "shade_end_immediate": "Po opustení nastaveného rozsahu slnka ukončí tienenie bez bežného potvrdzovacieho čakania.",
     "contact_delay": "Krátke čakanie po zmene okenného kontaktu pred vyhodnotením; potlačí rýchle opakované zmeny.",
-    "contact_lockout_enabled": "Pri otvorenom okne alebo dverách drží žalúziu v bezpečnej polohe. Po potvrdenom zatvorení chráni priechod ešte 30 minút. Vypnutím tejto ochrany kontakt slúži iba na vetranie.",
+    "contact_lockout_enabled": "Pri otvorenom okne alebo dverách drží žalúziu v bezpečnej polohe. Po potvrdenom zatvorení chráni priechod ešte 30 minút. Vypnutím tejto ochrany kontakt slúži iba na vetranie. Kontakt s neznámym alebo nedostupným stavom sa ignoruje, akoby nebol priradený. Po obnovení platného stavu sa znova použije.",
     "contact_state_delay": "Ako dlho musí nový stav kontaktu zostať stabilný, kým sa použije pri riadení.",
     "shading_over_ventilation": "Pri súčasne aktívnom tienení a vetraní uprednostní polohu tienenia, pri zachovaní ochrany kontaktov.",
     "open_once": "Po splnení ranného otvorenia ho v ten istý deň znovu automaticky neopakuje.",
