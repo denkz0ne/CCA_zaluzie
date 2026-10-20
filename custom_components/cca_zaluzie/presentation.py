@@ -93,6 +93,8 @@ def build_presentation(
     cfg: dict, rt: Runtime, snap: Snapshot, decision: Decision, now: datetime
 ) -> dict:
     """Describe the next intent; times are ISO strings, unknown future times are null."""
+    if cfg["window_open"] and snap.get(cfg["window_open"]).boolean() is None:
+        cfg = {**cfg, "window_open": ""}
     ts = now.timestamp()
     manual = rt.manual_since is not None
     manual_end = _manual_end(cfg, rt, now)

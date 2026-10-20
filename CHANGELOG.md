@@ -1,3 +1,10 @@
+# 2026.12.9
+
+- Apply the user's clarified policy: an unknown, unavailable, missing or invalid optional window/door contact behaves as unassigned for both automatic and manual control.
+- Clear stale contact protection and confirmation timers while ignoring the contact. Preserve its saved selection and subscription, automatically resuming contact logic on a valid state.
+- Keep valid open/closed contact protection, cover availability/position guards and other automation conditions unchanged.
+- Supersedes the narrower opening-only exception in 2026.12.8. Details: [release notes](docs/RELEASE_2026.12.9.md).
+
 # 2026.12.8
 
 - Fix morning opening blocked by an unknown/unavailable passage contact: allow only a confirmed movement toward the configured open position.

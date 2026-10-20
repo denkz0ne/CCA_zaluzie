@@ -313,6 +313,20 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
     """Update logical layers and choose one explained desired target."""
     ts, today = now.timestamp(), now.date().isoformat()
     trace: dict = {}
+    # User policy: an invalid optional door contact behaves as unassigned.
+    # Keep persisted configuration/subscriptions intact so valid reports recover.
+    contact_entity = cfg["window_open"]
+    if (
+        cfg["ventilation_enabled"]
+        and contact_entity
+        and snap.get(contact_entity).boolean() is None
+    ):
+        trace["contact.ignored"] = {"entity": contact_entity, "state": snap.get(contact_entity).state}
+        cfg = {**cfg, "window_open": ""}
+        rt.contact_lockout_until = None
+        rt.contact_closed_verified_at = None
+        rt.contact_lockout_release_used = False
+        rt.stable = {key: value for key, value in rt.stable.items() if not key.startswith("contact.")}
     allowed_states = {
         "open",
         "closed",
@@ -965,16 +979,7 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and mode != "window_lockout"
     ):
         inhibit = "manual"
-    # An unknown passage must not prevent a confirmed movement toward opening.
-    # Keep the guard for closing, unknown position/target, and stationary intent.
-    opening_motion = (
-        target is not None
-        and position is not None
-        and (target - position)
-        * (1 if cfg["open_position"] > cfg["close_position"] else -1)
-        > cfg["position_tolerance"]
-    )
-    if contact_unknown and (not force or force_contact_blocked) and not opening_motion:
+    if contact_unknown and (not force or force_contact_blocked):
         inhibit = "contact_unknown"
     if contact_pending and not force:
         inhibit = "contact_pending"

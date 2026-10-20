@@ -1267,13 +1267,14 @@ class CoverController:
             if type(target) not in (int, float) or not 0 <= target <= 100:
                 raise OperationError("Poloha musí byť medzi 0 a 100 %")
             release_contact_lockout = False
+            contact_reading = self._snapshot_inputs().get(self.config["window_open"])
             lockout_active = bool(
                 self.config["contact_lockout_enabled"]
+                and contact_reading.boolean() is not None
                 and self.runtime.contact_lockout_until is not None
                 and dt_util.now().timestamp() < self.runtime.contact_lockout_until
             )
             if lockout_active:
-                contact_reading = self._snapshot_inputs().get(self.config["window_open"])
                 contact = contact_reading.boolean()
                 closed_verified = (
                     contact is False

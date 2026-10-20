@@ -6,7 +6,7 @@ Home Assistant custom integration for automated blinds and shutters, with one au
 
 ## Project status
 
-The installable integration is version **2026.12.8**, for Home Assistant
+The installable integration is version **2026.12.9**, for Home Assistant
 **2026.9.0+**. The minimum is 2026.9; CI checks both the minimum release line
 and the current release. Download the published asset from
 [Releases](https://github.com/denkz0ne/CCA_zaluzie/releases).
