@@ -965,7 +965,16 @@ def evaluate(cfg: dict, rt: Runtime, snap: Snapshot, now: datetime) -> Decision:
         and mode != "window_lockout"
     ):
         inhibit = "manual"
-    if contact_unknown and (not force or force_contact_blocked):
+    # An unknown passage must not prevent a confirmed movement toward opening.
+    # Keep the guard for closing, unknown position/target, and stationary intent.
+    opening_motion = (
+        target is not None
+        and position is not None
+        and (target - position)
+        * (1 if cfg["open_position"] > cfg["close_position"] else -1)
+        > cfg["position_tolerance"]
+    )
+    if contact_unknown and (not force or force_contact_blocked) and not opening_motion:
         inhibit = "contact_unknown"
     if contact_pending and not force:
         inhibit = "contact_pending"

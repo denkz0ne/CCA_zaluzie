@@ -127,3 +127,17 @@ vrátane technických vyhodnotení. Simulácia zostáva oddelená a má filter.
 Každá udalosť má detail s časom, typom a pôvodnými údajmi; odtiaľ sa dá
 vrátiť na úplný zoznam. Úplný znamená údaje uchované podľa nastavených
 limitov histórie, nie neobmedzený archív.
+
+## Neznámy kontakt a bezpečné otváranie — 2026.12.8
+
+Neznámy alebo nedostupný kontakt už neblokuje pohyb, ktorý z nameranej polohy
+preukázateľne smeruje k otvorenej polohe. Smer vychádza z nastavených
+`open_position`/`close_position` a tolerancie, nie z predpokladu, že vyššie číslo
+vždy znamená otvorenie. Ostatné blokácie, manuálna ochrana, denné limity
+a podmienky zostávajú v platnosti.
+
+Zatváranie pri neznámom kontakte je naďalej blokované, vrátane Force-close.
+Ak chýba potvrdená poloha alebo cieľ, bezpečný smer nie je preukázaný a
+blokácia zostáva. Ochrana otvoreného priechodu a 30-minútová ochrana po
+zatvorení sa nemenia. Nie je potrebné vypínať kontakt ani meniť ZHA či
+kalibráciu, aby sa táto oprava uplatnila.

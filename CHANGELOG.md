@@ -1,3 +1,10 @@
+# 2026.12.8
+
+- Fix morning opening blocked by an unknown/unavailable passage contact: allow only a confirmed movement toward the configured open position.
+- Preserve unknown-contact closing and Force-close protection, conservative behavior without position feedback, manual protection and all other gates.
+- Respect reversed open/close orientation and position tolerance. No position inversion, calibration, configuration or storage migration.
+- Details: [release notes](docs/RELEASE_2026.12.8.md).
+
 # 2026.12.7
 
 - Implement approved minimal 24-hour history: a plain measured-position line over a filled yellow day / blue night solar curve, sharing time and the horizon crossing.
